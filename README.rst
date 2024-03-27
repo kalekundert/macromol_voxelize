@@ -12,15 +12,15 @@ Macromolecular Voxelization
 
 .. image:: https://img.shields.io/readthedocs/macromol_voxelize.svg
    :alt: Documentation
-   :target: https://macromol-voxelize.readthedocs.io/en/latest/?badge=latest
+   :target: https://macromol-voxelize.readthedocs.io/en/latest/
 
 .. image:: https://img.shields.io/github/actions/workflow/status/kalekundert/macromol_voxelize/test.yml?branch=master
    :alt: Test status
    :target: https://github.com/kalekundert/macromol_voxelize/actions
 
-.. image:: https://img.shields.io/coveralls/kalekundert/macromol_voxelize.svg
+.. image:: https://img.shields.io/codecov/c/github/kalekundert/macromol_voxelize
    :alt: Test coverage
-   :target: https://coveralls.io/github/kalekundert/macromol_voxelize?branch=master
+   :target: https://app.codecov.io/github/kalekundert/macromol_voxelize
 
 .. image:: https://img.shields.io/github/last-commit/kalekundert/macromol_voxelize?logo=github
    :alt: Last commit
