@@ -1,25 +1,34 @@
 [build-system]
-requires = ["flit_core >=3.2,<4"]
-build-backend = "flit_core.buildapi"
+requires = [
+  "setuptools>=42",
+  "setuptools-scm",
+  "pybind11>2.10",
+]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "macromol_voxelize"
 authors = [
   {name = "Kale Kundert", email = "kale@thekunderts.net"},
 ]
+description = "Create 3D images from atomic coordinates"
 readme = 'README.rst'
-dynamic = ["version", "description"]
-requires-python = "~=3.8"
+dynamic = ["version"]
+requires-python = "~=3.10"
 classifiers = [
-  'Programming Language :: Python :: 3',
+  'Programming Language :: Python :: 3.10',
+  'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
 ]
 dependencies = [
+  'numpy',
+  'polars',
 ]
 
 [project.optional-dependencies]
 test = [
-  'pytest',
+  'macromol_dataframe',
   'parametrize_from_file',
+  'pytest',
 ]
 doc = [
   'sphinx',
@@ -28,21 +37,27 @@ doc = [
 ]
 
 [project.urls]
-'Documentation' = 'https://macromol-voxelize.readthedocs.io/en/latest/'
+'Documentation' = 'https://macromol_voxelize.readthedocs.io/en/latest/'
 'Version Control' = 'https://github.com/kalekundert/macromol_voxelize'
 'Bug Tracker' = 'https://github.com/kalekundert/macromol_voxelize/issues'
 'Continuous Integration' = 'https://github.com/kalekundert/macromol_voxelize/actions'
 'Test Coverage' = 'https://coveralls.io/github/kalekundert/macromol_voxelize'
 
-[tool.ruff]
+[tool.setuptools]
+packages = ["macromol_voxelize"]
+
+[tool.setuptools.dynamic]
+version = {attr = "macromol_voxelize.__version__"}
+
+[tool.ruff.lint]
 select = ["F"]
 ignore = ["F405", "F403"]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 
 [tool.pytest.ini_options]
-addopts = "--doctest-modules --doctest-glob='*.rst'"
+addopts = "--ignore macromol_voxelize --doctest-modules --doctest-glob='*.rst'"
 doctest_optionflags = 'NORMALIZE_WHITESPACE'
 
 [tool.coverage.run]
