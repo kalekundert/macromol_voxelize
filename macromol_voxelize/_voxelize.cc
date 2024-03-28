@@ -17,6 +17,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/operators.h>
 #include <pybind11/eigen.h>
+#include <pybind11/stl.h>
 
 #include <string>
 #include <vector>
@@ -46,11 +47,11 @@ scalar_t static const FUDGE_FACTOR = 1 + 1e-6;
 
 struct Atom {
 
-	Atom(Sphere sphere, int channel, float occupancy):
-		sphere(sphere), channel(channel), occupancy(occupancy) {}
+	Atom(Sphere sphere, std::vector<int> channels, float occupancy):
+		sphere(sphere), channels(channels), occupancy(occupancy) {}
 
 	Sphere const sphere;
-	int const channel;
+	std::vector<int> const channels;
 	float const occupancy;
 };
 
@@ -77,6 +78,16 @@ struct Grid {
 };
 
 
+template < class T >
+std::ostream& operator << (std::ostream& os, std::vector<T> const & v) {
+    os << "[";
+		for (auto const &item: v) {
+        os << " " << item;
+		}
+    os << "]";
+    return os;
+}
+
 std::ostream& operator << (std::ostream& os, vector_t const & vec) {
 	Eigen::IOFormat repr(
 			Eigen::StreamPrecision,
@@ -100,7 +111,7 @@ std::ostream& operator << (std::ostream& os, Sphere const & sphere) {
 
 std::ostream& operator << (std::ostream& os, Atom const & atom) {
     os << "Atom(sphere=" << atom.sphere <<
-             ", channel=" << atom.channel <<
+             ", channels=" << atom.channels <<
              ", occupancy=" << atom.occupancy << ")";
     return os;
 }
@@ -109,17 +120,6 @@ std::ostream& operator << (std::ostream& os, Grid const & grid) {
     os << "Grid(length_voxels=" << grid.length_voxels <<
              ", resolution_A=" << grid.resolution_A <<
              ", center_A=" << grid.center_A << ")";
-    return os;
-}
-
-template < class T >
-std::ostream& operator << (std::ostream& os, const std::vector<T>& v) {
-    os << "[";
-    for (typename std::vector<T>::const_iterator ii = v.begin(); ii != v.end(); ++ii)
-    {
-        os << " " << *ii;
-    }
-    os << "]";
     return os;
 }
 
@@ -255,16 +255,17 @@ _add_atom_to_image(
 	auto voxels_within_img = _discard_voxels_outside_image(grid, voxels);
 
 	scalar_t total_overlap_A3 = 0;
-	std::vector<scalar_t> overlaps;
+	float fill;
 
 	for (auto const & voxel: voxels_within_img.colwise()) {
 		Hexahedron cube = _get_voxel_cube(grid, voxel);
 		scalar_t overlap_A3 = overlap(atom.sphere, cube);
 		total_overlap_A3 += overlap_A3;
-		overlaps.push_back(overlap_A3);
+		fill = atom.occupancy * overlap_A3 / atom.sphere.volume;
 
-		img_accessor(atom.channel, voxel(0), voxel(1), voxel(2)) += 
-			atom.occupancy * overlap_A3 / atom.sphere.volume;
+		for (auto const channel: atom.channels) {
+			img_accessor(channel, voxel(0), voxel(1), voxel(2)) += fill;
+		}
 	}
 
 	// I included the following check because of a claim made in the source code 
@@ -340,9 +341,9 @@ PYBIND11_MODULE(_voxelize, m) {
 
 	py::class_<Atom>(m, "Atom")
 		.def(
-				py::init<Sphere, int, float>(),
+				py::init<Sphere, std::vector<int>, float>(),
 				py::arg("sphere"),
-				py::arg("channel"),
+				py::arg("channels"),
 				py::arg("occupancy"))
 		.def(
                 "__repr__",
@@ -357,20 +358,20 @@ PYBIND11_MODULE(_voxelize, m) {
 					[](Atom const & atom) {
 						return py::make_tuple(
 								atom.sphere,
-								atom.channel,
+								atom.channels,
 								atom.occupancy);
 					},
 					[](py::tuple state) {
 						if (state.size() != 3) {
-							throw std::runtime_error("can't unpickle grid");
+							throw std::runtime_error("can't unpickle atom");
 						}
 						return Atom {
 								state[0].cast<Sphere>(), 
-								state[1].cast<int>(), 
+								state[1].cast<std::vector<int>>(), 
 								state[2].cast<float>()};
 					}))
 		.def_readonly("sphere", &Atom::sphere)
-		.def_readonly("channel", &Atom::channel)
+		.def_readonly("channels", &Atom::channels)
 		.def_readonly("occupancy", &Atom::occupancy);
 	
 	py::class_<Grid>(m, "Grid")

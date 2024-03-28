@@ -1,15 +1,13 @@
 import polars as pl
 import numpy as np
-import re
 
 from ._voxelize import (
         Sphere, Atom, Grid,
         _add_atom_to_image, _get_voxel_center_coords,
 )
 from dataclasses import dataclass
-from numbers import Real
 
-from typing import TypeAlias, Optional
+from typing import TypeAlias
 from numpy.typing import NDArray
 
 """\
@@ -40,47 +38,130 @@ This list only includes data types that don't have their own classes.
 
 @dataclass
 class ImageParams:
+    channels: int
     grid: Grid
-    channels: list[str]
-    element_radii_A: dict[str: float] | float
 
 Image: TypeAlias = NDArray
 
-def image_from_atoms(
-        atoms: pl.DataFrame,
-        img_params: ImageParams,
-        channel_cache: Optional[dict]=None,
-) -> Image:
+def image_from_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> Image:
+    print(atoms)
+    _check_channels(atoms, img_params.channels)
 
     img = _make_empty_image(img_params)
-    channel_cache = {} if channel_cache is None else channel_cache
+    grid = img_params.grid
 
     # Without this filter, `_find_voxels_possibly_contacting_sphere()` becomes 
     # a performance bottleneck.
-    atoms = _discard_atoms_outside_image(atoms, img_params)
+    atoms = _discard_atoms_outside_image(atoms, grid)
 
     for row in atoms.iter_rows(named=True):
-        atom = _make_atom(row, img_params, channel_cache)
-        _add_atom_to_image(img, img_params.grid, atom)
+        atom = _make_atom(row)
+        _add_atom_to_image(img, grid, atom)
 
     return img
         
-def get_element_channel(channels, element, cache):
-    if element in cache:
-        return cache[element]
+def set_atom_radius(atoms: pl.DataFrame, radius_A: float):
+    """\
+    Assign all atoms the same radius.
 
-    for i, channel in enumerate(channels):
-        if re.fullmatch(channel, element):
-            cache[element] = i
-            return i
+    Arguments:
+        atoms:
+            A dataframe representing the atoms to voxelize.
 
-    raise RuntimeError(f"element {element} didn't match any channels")
+        radius_A:
+            The radius to assign, in angstroms.
 
-def get_max_element_radius(radii):
-    if isinstance(radii, Real):
-        return radii
-    else:
-        return max(radii.values())
+    Returns:
+        The input dataframe, with a new *radius_A* column.  Every row in this 
+        column will have the same value.
+    """
+    return atoms.with_columns(radius_A=radius_A)
+
+def set_atom_channels_by_element(
+        atoms: pl.DataFrame,
+        channels: list[str],
+        first_match: bool = False,
+        allow_missing_atoms: bool = False,
+):
+    """\
+    Assign atoms to channels based on their element types.
+
+    Arguments:
+        atoms:
+            A dataframe representing the atoms to voxelize.  This function 
+            requires a column named "element", which must contain element names 
+            as strings.
+
+        channels:
+            A list of regular expression patterns, each of which should match 
+            elements that belong in a particular channel.  The *first_match* 
+            argument controls what happens if multiple patterns match the same 
+            atom.
+
+            For example, ``['C', 'N', 'O', '.*']`` would place carbon in the 
+            first channel, nitrogen in the second channel, and oxygen in the 
+            third channel.  The fourth channel would contain all atoms 
+            (including those already in one of the first three channels) if 
+            *first_match=False*, otherwise it contain just those atoms that 
+            aren't in of the earlier channels.
+
+        first_match:
+            If *True*, only allow each atom to occupy one channel: the first 
+            one it matches.  If *False*, each atom will occupy every channel it 
+            matches.
+
+        allow_missing_atoms:
+            If *True*, atoms that aren't assigned to any channel will be 
+            silently removed.  By default, an error will be raised if any such 
+            atoms are present.
+
+    Returns:
+        The input dataframe, with a *channels* column added.  Each entry in 
+        this column will be a list of integers, where each integer identifies a 
+        single channel and will be in the range [0, ``len(channels) - 1``].
+    """
+    channel_exprs = [
+            pl.when(
+                pl.col('element').str.contains(pattern)
+            )
+            .then(i)
+            for i, pattern in enumerate(channels)
+    ]
+    if first_match:
+        channel_exprs = pl.coalesce(channel_exprs)
+
+    atoms = (
+            atoms
+            .with_columns(
+                channels=pl.concat_list(channel_exprs).list.drop_nulls()
+            )
+    )
+
+    if allow_missing_atoms:
+        return atoms.filter(pl.col('channels').list.len() > 0)
+
+    have_missing_atoms = (
+            atoms
+            .select(
+                (pl.col('channels').list.len() == 0).any()
+            )
+            .item()
+    )
+    if have_missing_atoms:
+        missing_elements = (
+                atoms
+                .filter(pl.col('channels').list.len() == 0)
+                .get_column('element')
+                .unique()
+                .to_list()
+        )
+        raise ValidationError(f"""\
+all atoms must be assigned at least one channel
+• channels: {channels!r}
+✖ unassigned elements: {missing_elements!r}
+""")
+
+    return atoms
 
 def get_voxel_center_coords(grid, voxels):
     # There are two things to keep in mind when passing arrays between 
@@ -110,13 +191,17 @@ def get_voxel_center_coords(grid, voxels):
     return coords_A.reshape(voxels.shape)
 
 
+def _check_channels(atoms, num_channels):
+    channels = atoms['channels'].explode()
+    assert channels.min() >= 0
+    assert channels.max() < num_channels
+
 def _make_empty_image(img_params):
-    shape = len(img_params.channels), *img_params.grid.shape
+    shape = img_params.channels, *img_params.grid.shape
     return np.zeros(shape, dtype=np.float32)
 
-def _discard_atoms_outside_image(atoms, img_params):
-    grid = img_params.grid
-    max_r = get_max_element_radius(img_params.element_radii_A)
+def _discard_atoms_outside_image(atoms, grid):
+    max_r = atoms['radius_A'].max()
 
     min_corner = grid.center_A - (grid.length_A / 2 + max_r)
     max_corner = grid.center_A + (grid.length_A / 2 + max_r)
@@ -130,28 +215,15 @@ def _discard_atoms_outside_image(atoms, img_params):
             pl.col('z') < max_corner[2],
     )
 
-def _make_atom(row, img_params, channel_cache):
+def _make_atom(row):
     return Atom(
             sphere=Sphere(
                 center_A=np.array([row['x'], row['y'], row['z']]),
-                radius_A=_get_element_radius(
-                    img_params.element_radii_A,
-                    row['element'],
-                ),
+                radius_A=row['radius_A'],
             ),
-            channel=get_element_channel(
-                img_params.channels,
-                row['element'],
-                channel_cache,
-            ),
+            channels=row['channels'],
             occupancy=row['occupancy'],
     )
 
-def _get_element_radius(radii, element):
-    if isinstance(radii, Real):
-        return radii
-    try:
-        return radii[element]
-    except KeyError:
-        return radii['*']
-
+class ValidationError(Exception):
+    pass

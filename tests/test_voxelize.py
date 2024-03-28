@@ -9,7 +9,7 @@ import parametrize_from_file as pff
 import pickle
 
 from macromol_voxelize import Sphere, Atom, Grid
-from macromol_dataframe.testing import atoms_fwf, coord, coords
+from macromol_dataframe.testing import coord, coords
 from io import StringIO
 from itertools import product
 from pytest import approx
@@ -41,18 +41,49 @@ def sphere(params):
             radius_A=with_math.eval(params['radius_A']),
     )
 
-def cube(params):
-    return mmvox.Cube(
-            center_A=coord(params['center_A']),
-            length_A=with_math.eval(params['length_A']),
-    )
-
 def atom(params):
     return Atom(
             sphere=sphere(params),
-            channel=int(params['channel']),
+            channels=[int(x) for x in params['channels'].split()],
             occupancy=float(params.get('occupancy', 1)),
     )
+
+def atoms(params):
+    dtypes = {
+            'channels': pl.List(pl.Int32),
+            'radius_A': float,
+            'x': float,
+            'y': float,
+            'z': float,
+            'occupancy': float,
+    }
+    col_aliases = {
+            'c': 'channels',
+            'r': 'radius_A',
+            'f': 'occupancy',
+    }
+
+    rows = [line.split() for line in params.splitlines()]
+    header, rows = rows[0], rows[1:]
+    df = (
+            pl.DataFrame(rows, header, orient='row')
+            .rename(lambda x: col_aliases.get(x, x))
+    )
+
+    if 'channels' in df.columns:
+        df = df.with_columns(
+                pl.col('channels').str.split(','),
+        )
+
+    df = df.cast({
+        (K := col_aliases.get(k, k)): dtypes.get(K, str)
+        for k in header
+    })
+
+    if 'occupancy' not in df.columns:
+        df = df.with_columns(occupancy=pl.lit(1.0))
+
+    return df
 
 def index(params):
     return np.array([int(x) for x in params.split()])
@@ -64,23 +95,9 @@ def indices(params):
     return indices
 
 def image_params(params):
-    grid_ = grid(params['grid'])
-    channels = params.get('channels', '.*').split(' ')
-
-    try:
-        radii = params['element_radii_A']
-    except KeyError:
-        radii = grid_.resolution_A / 2
-    else:
-        if isinstance(radii, dict):
-            radii = {k: float(v) for k, v in radii.items()}
-        else:
-            radii = float(radii)
-
     return mmvox.ImageParams(
-            grid=grid_,
-            channels=channels,
-            element_radii_A=radii,
+            channels=int(params.get('channels', '1')),
+            grid=grid(params['grid']),
     )
 
 def image(params):
@@ -97,7 +114,40 @@ def assert_images_match(actual, expected):
 
 @pff.parametrize(
         schema=pff.cast(
-            atoms=atoms_fwf,
+            atoms=atoms,
+            radius=float,
+            expected=atoms,
+        ),
+)
+def test_set_atom_radius(atoms, radius, expected):
+    actual = mmvox.set_atom_radius(atoms, radius)
+    pl.testing.assert_frame_equal(actual, expected, check_column_order=False)
+
+@pff.parametrize(
+        schema=[
+            pff.cast(
+                atoms=atoms,
+                kwargs=with_py.eval,
+                expected=atoms,
+            ),
+            pff.defaults(
+                kwargs={},
+            ),
+            with_mmvox.error_or('expected'),
+        ]
+)
+def test_set_atom_channels_by_element(atoms, channels, kwargs, expected, error):
+    with error:
+        actual = mmvox.set_atom_channels_by_element(atoms, channels, **kwargs)
+        pl.testing.assert_frame_equal(
+                actual, expected,
+                check_column_order=False,
+        )
+
+
+@pff.parametrize(
+        schema=pff.cast(
+            atoms=atoms,
             img_params=image_params,
             expected=image,
         ),
@@ -108,13 +158,12 @@ def test_image_from_atoms(atoms, img_params, expected):
 
 def test_make_empty_image():
     img_params = mmvox.ImageParams(
+            channels=2,
             grid=Grid(
                 length_voxels=3,
                 resolution_A=1,         # not relevant
                 center_A=np.zeros(3),   # not relevant
             ),
-            channels=['C', '*'],
-            element_radii_A=1,          # not relevant
     )
     np.testing.assert_array_equal(
             _mmvox._make_empty_image(img_params),
@@ -124,47 +173,34 @@ def test_make_empty_image():
 
 @pff.parametrize(
         schema=pff.cast(
-            atoms=atoms_fwf,
-            img_params=image_params,
-            expected=atoms_fwf,
+            atoms=atoms,
+            grid=grid,
+            expected=atoms,
         ),
 )
-def test_discard_atoms_outside_image(atoms, img_params, expected):
-    actual = _mmvox._discard_atoms_outside_image(atoms, img_params)
+def test_discard_atoms_outside_image(atoms, grid, expected):
+    actual = _mmvox._discard_atoms_outside_image(atoms, grid)
     pl.testing.assert_frame_equal(actual, expected)
 
 def test_make_atom():
-    row = dict(element='C', x=1, y=2, z=3, occupancy=0.8)
-    img_params = mmvox.ImageParams(
-            grid=None,
-            channels=['C', '*'],
-            element_radii_A=1,
-    )
-    atom = _mmvox._make_atom(row, img_params, {})
+    row = dict(channels=[0], radius_A=0.5, x=1, y=2, z=3, occupancy=0.8)
+    atom = _mmvox._make_atom(row)
 
     assert atom.sphere.center_A == approx([1, 2, 3])
-    assert atom.sphere.radius_A == approx(1)
-    assert atom.channel == 0
+    assert atom.sphere.radius_A == approx(0.5)
+    assert atom.channels == [0]
     assert atom.occupancy == approx(0.8)
-
-@pff.parametrize(
-        schema=pff.cast(radii=with_py.eval, expected=float),
-)
-def test_get_element_radius(radii, element, expected):
-    assert _mmvox._get_element_radius(radii, element) == expected
-
-@pff.parametrize(
-        schema=pff.cast(radii=with_py.eval, expected=float),
-)
-def test_get_element_channel(channels, element, expected):
-    assert mmvox.get_element_channel(channels, element, {}) == expected
 
 
 @pff.parametrize(
         schema=pff.cast(grid=grid, atom=atom, expected=image)
 )
 def test_add_atom_to_image(grid, atom, expected):
-    img = np.zeros((atom.channel + 1, *grid.shape), dtype=np.float32)
+    img_params = mmvox.ImageParams(
+            channels=max(atom.channels) + 1,
+            grid=grid,
+    )
+    img = _mmvox._make_empty_image(img_params)
     _mmvox_cpp._add_atom_to_image(img, grid, atom)
     assert_images_match(img, expected)
 
@@ -178,7 +214,7 @@ def test_add_atom_to_image_no_copy():
                 center_A=np.zeros(3),
                 radius_A=1,
             ),
-            channel=0,
+            channels=[0],
             occupancy=1,
     )
 
@@ -321,12 +357,12 @@ def test_atom_attrs():
                 center_A=np.array([1,2,3]),
                 radius_A=4,
             ),
-            channel=0,
+            channels=[0],
             occupancy=0.5,
     )
     assert a.sphere.center_A == approx([1,2,3])
     assert a.sphere.radius_A == 4
-    assert a.channel == 0
+    assert a.channels == [0]
     assert a.occupancy == 0.5
 
 def test_atom_repr():
@@ -335,14 +371,14 @@ def test_atom_repr():
                 center_A=np.array([1,2,3]),
                 radius_A=4,
             ),
-            channel=0,
+            channels=[0],
             occupancy=0.5,
     )
     a_repr = eval(repr(a))
 
     np.testing.assert_array_equal(a_repr.sphere.center_A, [1,2,3])
     assert a_repr.sphere.radius_A == 4
-    assert a_repr.channel == 0
+    assert a_repr.channels == [0]
     assert a_repr.occupancy == 0.5
 
 def test_atom_pickle():
@@ -351,12 +387,12 @@ def test_atom_pickle():
                 center_A=np.array([1,2,3]),
                 radius_A=4,
             ),
-            channel=0,
+            channels=[0],
             occupancy=0.5,
     )
     a_pickle = pickle.loads(pickle.dumps(a))
 
     np.testing.assert_array_equal(a_pickle.sphere.center_A, [1,2,3])
     assert a_pickle.sphere.radius_A == 4
-    assert a_pickle.channel == 0
+    assert a_pickle.channels == [0]
     assert a_pickle.occupancy == 0.5
