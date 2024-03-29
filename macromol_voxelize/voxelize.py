@@ -44,7 +44,6 @@ class ImageParams:
 Image: TypeAlias = NDArray
 
 def image_from_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> Image:
-    print(atoms)
     _check_channels(atoms, img_params.channels)
 
     img = _make_empty_image(img_params)
@@ -60,7 +59,7 @@ def image_from_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> Image:
 
     return img
         
-def set_atom_radius(atoms: pl.DataFrame, radius_A: float):
+def set_atom_radius_A(atoms: pl.DataFrame, radius_A: float):
     """\
     Assign all atoms the same radius.
 
@@ -122,7 +121,7 @@ def set_atom_channels_by_element(
     """
     channel_exprs = [
             pl.when(
-                pl.col('element').str.contains(pattern)
+                pl.col('element').str.contains(f'^({pattern})$')
             )
             .then(i)
             for i, pattern in enumerate(channels)

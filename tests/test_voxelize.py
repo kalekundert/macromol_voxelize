@@ -119,8 +119,8 @@ def assert_images_match(actual, expected):
             expected=atoms,
         ),
 )
-def test_set_atom_radius(atoms, radius, expected):
-    actual = mmvox.set_atom_radius(atoms, radius)
+def test_set_atom_radius_A(atoms, radius, expected):
+    actual = mmvox.set_atom_radius_A(atoms, radius)
     pl.testing.assert_frame_equal(actual, expected, check_column_order=False)
 
 @pff.parametrize(

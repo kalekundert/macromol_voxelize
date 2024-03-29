@@ -773,7 +773,7 @@ test_image_from_atoms:
     expected:
       {}
 
-test_set_atom_radius:
+test_set_atom_radius_A:
   -
     atoms:
       > x y z
@@ -851,3 +851,18 @@ test_set_atom_channels_by_element:
       > C       1 2 3 0
       > N       2 3 4 1
       > O       3 4 5 2
+  -
+    id: partial
+    atoms:
+      > element x y z
+      > S       1 2 3
+      > Se      2 3 4
+      > Si      3 4 5
+    channels:
+      [S|Se]
+    kwargs:
+      allow_missing_atoms: True
+    expected:
+      > element x y z c
+      > S       1 2 3 0
+      > Se      2 3 4 0
