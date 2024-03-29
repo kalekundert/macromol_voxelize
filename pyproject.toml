@@ -12,7 +12,7 @@ authors = [
   {name = "Kale Kundert", email = "kale@thekunderts.net"},
 ]
 description = "Create 3D images from atomic coordinates"
-readme = 'README.rst'
+readme = 'README.md'
 dynamic = ["version"]
 requires-python = "~=3.10"
 classifiers = [
