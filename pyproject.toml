@@ -80,5 +80,4 @@ exclude_lines = [
 
 [tool.semantic_release]
 version_variables = ['macromol_voxelize/__init__.py:__version__']
-build_command = 'python -m pip install build && python -m build'
 major_on_zero = false
