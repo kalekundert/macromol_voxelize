@@ -25,6 +25,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+pymol = [
+  'macromol_dataframe',
+  'matplotlib',
+  'mixbox',
+  'pipeline_func',
+]
 test = [
   'macromol_dataframe',
   'parametrize_from_file',
@@ -52,6 +58,7 @@ version = {attr = "macromol_voxelize.__version__"}
 [tool.ruff.lint]
 select = ["F"]
 ignore = ["F405", "F403"]
+exclude = ["macromol_voxelize/vendored/*"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
