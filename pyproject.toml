@@ -55,6 +55,18 @@ packages = ["macromol_voxelize"]
 [tool.setuptools.dynamic]
 version = {attr = "macromol_voxelize.__version__"}
 
+[tool.cibuildwheel]
+test-extras = ["test"]
+test-command = "pytest {package}/tests"
+# Only run the tests if a polars wheel is available:
+test-skip = [
+  "pp*",
+  "*-win32",
+  "*-win_arm64",
+  "*-musllinux*",
+  "*-*linux_{i686,ppc64le,s390x}",
+]
+
 [tool.ruff.lint]
 select = ["F"]
 ignore = ["F405", "F403"]

@@ -2,8 +2,30 @@ name: Release
 on: workflow_dispatch
 
 jobs:
-  build_wheels:
+  bump-version:
+    name: Bump version number
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: python-semantic-release/python-semantic-release@v9.3.1
+        id: release
+        with:
+          changelog: false
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      released: ${{ steps.release.outputs.released }}
+
+  build-wheels:
     name: Build wheels on ${{ matrix.os }}
+    needs: bump-version
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -13,6 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.bump-version.outputs.tag }}
           submodules: true
 
       - name: Build wheels
@@ -23,12 +46,14 @@ jobs:
           name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
           path: ./wheelhouse/*.whl
 
-  build_sdist:
+  build-sdist:
     name: Build source distribution
+    needs: bump-version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.bump-version.outputs.tag }}
           submodules: true
 
       - name: Build sdist
@@ -39,35 +64,23 @@ jobs:
           name: cibw-sdist
           path: dist/*.tar.gz
 
-  upload_pypi:
+  upload-pypi:
     name: Upload to PyPI
-    needs: [build_wheels, build_sdist]
+    needs:
+      - bump-version
+      - build-wheels
+      - build-sdist
+
     runs-on: ubuntu-latest
-    concurrency: release
     permissions:
       id-token: write
-      contents: write
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - uses: actions/download-artifact@v4
         with:
           pattern: cibw-*
           path: dist
           merge-multiple: true
 
-      - uses: python-semantic-release/python-semantic-release@v9.3.1
-        id: release
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
       - uses: pypa/gh-action-pypi-publish@release/v1
-        if: steps.release.outputs.released == 'true'
-
-      - uses: python-semantic-release/upload-to-gh-release@main
-        if: steps.release.outputs.released == 'true'
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+        if: needs.bump-version.outputs.released == 'true'
