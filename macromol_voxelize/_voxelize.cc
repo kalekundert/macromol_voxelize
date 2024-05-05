@@ -47,12 +47,12 @@ scalar_t static const FUDGE_FACTOR = 1 + 1e-6;
 
 struct Atom {
 
-	Atom(Sphere sphere, std::vector<int> channels, float occupancy):
+	Atom(Sphere sphere, std::vector<int> channels, scalar_t occupancy):
 		sphere(sphere), channels(channels), occupancy(occupancy) {}
 
 	Sphere const sphere;
 	std::vector<int> const channels;
-	float const occupancy;
+	scalar_t const occupancy;
 };
 
 struct Grid {
@@ -243,19 +243,20 @@ _get_voxel_cube(
 	};
 }
 
+template <typename T>
 void
 _add_atom_to_image(
-		py::array_t<float> img,
+		py::array_t<T> img,
 		Grid const & grid,
 		Atom const & atom) {
 
-	auto img_accessor = img.mutable_unchecked<4>();
+	auto img_accessor = img.template mutable_unchecked<4>();
 
 	auto voxels = _find_voxels_possibly_contacting_sphere(grid, atom.sphere);
 	auto voxels_within_img = _discard_voxels_outside_image(grid, voxels);
 
 	scalar_t total_overlap_A3 = 0;
-	float fill;
+	scalar_t fill;
 
 	for (auto const & voxel: voxels_within_img.colwise()) {
 		Hexahedron cube = _get_voxel_cube(grid, voxel);
@@ -341,7 +342,7 @@ PYBIND11_MODULE(_voxelize, m) {
 
 	py::class_<Atom>(m, "Atom")
 		.def(
-				py::init<Sphere, std::vector<int>, float>(),
+				py::init<Sphere, std::vector<int>, scalar_t>(),
 				py::arg("sphere"),
 				py::arg("channels"),
 				py::arg("occupancy"))
@@ -368,7 +369,7 @@ PYBIND11_MODULE(_voxelize, m) {
 						return Atom {
 								state[0].cast<Sphere>(), 
 								state[1].cast<std::vector<int>>(), 
-								state[2].cast<float>()};
+								state[2].cast<scalar_t>()};
 					}))
 		.def_readonly("sphere", &Atom::sphere)
 		.def_readonly("channels", &Atom::channels)
@@ -413,7 +414,14 @@ PYBIND11_MODULE(_voxelize, m) {
 
 	m.def(
 			"_add_atom_to_image",
-			&_add_atom_to_image,
+			&_add_atom_to_image<float>,
+			py::arg("img").noconvert(),
+			py::arg("grid"),
+			py::arg("atom")); 
+
+	m.def(
+			"_add_atom_to_image",
+			&_add_atom_to_image<double>,
 			py::arg("img").noconvert(),
 			py::arg("grid"),
 			py::arg("atom")); 

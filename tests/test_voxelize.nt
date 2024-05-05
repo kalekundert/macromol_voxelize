@@ -772,6 +772,52 @@ test_image_from_atoms:
       grid: 2
     expected:
       {}
+  -
+    id: dtype-float32
+    atoms:
+      > c r    x    y    z
+      > 0 0.5  0.0 -0.5 -0.5
+      > 1 0.5  0.0  0.5  0.5
+    img_params:
+      grid: 2
+      channels: 2
+      dtype: np.float32
+    expected:
+      0 0 0 0: 1/2
+      0 1 0 0: 1/2
+      1 0 1 1: 1/2
+      1 1 1 1: 1/2
+  -
+    id: dtype-float64
+    atoms:
+      > c r    x    y    z
+      > 0 0.5  0.0 -0.5 -0.5
+      > 1 0.5  0.0  0.5  0.5
+    img_params:
+      grid: 2
+      channels: 2
+      dtype: np.float64
+    expected:
+      0 0 0 0: 1/2
+      0 1 0 0: 1/2
+      1 0 1 1: 1/2
+      1 1 1 1: 1/2
+  -
+    id: assign-channels
+    atoms:
+      > element r    x    y    z
+      > C       0.5  0.0 -0.5 -0.5
+      > N       0.5  0.0  0.5  0.5
+    img_params:
+      grid: 2
+      channels: 2
+      assign_channels:
+        > lambda df: set_atom_channels_by_element(df, channels=['C', 'N'])
+    expected:
+      0 0 0 0: 1/2
+      0 1 0 0: 1/2
+      1 0 1 1: 1/2
+      1 1 1 1: 1/2
 
 test_set_atom_radius_A:
   -

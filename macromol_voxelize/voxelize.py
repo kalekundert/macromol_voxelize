@@ -7,7 +7,7 @@ from ._voxelize import (
 )
 from dataclasses import dataclass
 
-from typing import TypeAlias
+from typing import TypeAlias, Callable
 from numpy.typing import NDArray
 
 """\
@@ -38,20 +38,115 @@ This list only includes data types that don't have their own classes.
 
 @dataclass
 class ImageParams:
+    """\
+    A collection of parameters that apply to the image as a whole, as opposed
+    to individual atoms.
+
+    The most important parameters are `channels` and `grid`.  Together, these 
+    specify the dimensions of the image.  The remaining parameters have 
+    reasonable defaults.
+    """
+
     channels: int
+    """\
+    The number of channels in the image.
+
+    Note that this must be consistent with the *channels* column of the *atoms* 
+    data frame passed to `image_from_atoms()`.  An error will be raised if any 
+    atoms have channel indices that exceed the actual number of channels, or 
+    are negative.
+    """
+
     grid: Grid
+    """\
+    The spatial dimensions of the image.
+    """
+
+    dtype: type[np.floating] = np.float32
+    """\
+    The data type used to encode each voxel of the image.
+
+    The following data types are supported:
+
+    - `np.float32`, a.k.a. `np.single`
+    - `np.float64`, a.k.a. `np.double`
+
+    Note that 64-bit (i.e. double-precision) floating point numbers are always 
+    used for the intermediate calculations needed to fill in each voxel.  
+    According to the overlap_ library, which implements most of these 
+    calculations, "reducing the numerical precision of the scalar floating 
+    point type will have a significant impact on the precision and stability of 
+    the calculations".  Therefore, this setting only affects the precision used 
+    to store the final result, and in turn the size of the final image.
+    """
+
+    assign_channels: Callable[[pl.DataFrame], pl.DataFrame] = lambda x: x
+    """\
+    A function that can be used to assign channels the atoms being voxelized.
+
+    This function is called after an initial filtering step that removes many 
+    of the atoms that are too far away to be included in the image.  As such, 
+    this can be slightly more efficient that assigning channels for every atom 
+    in advance.  
+
+    This function is passed the filtered *atoms* data frame and should return a 
+    modified version of the same.  Do not modify any values in the *x*, *y*, 
+    *z*, or *radius_A* columns, despite the possibility of doing so.  These 
+    values have already been used in the aforementioned filtering steps, and 
+    changing them here would lead to inconsistent results.
+    """
 
 Image: TypeAlias = NDArray
 
 def image_from_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> Image:
-    _check_channels(atoms, img_params.channels)
+    """\
+    Create an voxelized representation of the given atoms.
 
+    Arguments:
+        atoms:
+            A dataframe representing the atoms to voxelize.  The following 
+            columns are used to build the image.  Any other columns will be 
+            silently ignored:
+
+            - *x*, *y*, *z* (required): The center coordinates of each atom, in 
+              units of angstroms.
+
+            - *radius_A* (required): The radius of each atom, in units of 
+              angstroms.  The `set_atom_radius_A()` function can be used to 
+              create this column, if necessary.
+
+            - *channels* (required): A list of integers specifying the channels 
+              that each atom belongs to.  To be clear, each atom can belong to 
+              any number of channels.  Each channel index must be between 0 and 
+              ``img_params.channels - 1``.  Note that this column doesn't have 
+              to be present in the *atoms* dataframe; it can also be calculated 
+              by `img_params.assign_channels` after an initial filtering step.
+
+            - *occupancy* (optional): How "present" each atom is.  More 
+              specifically, this is a factor that will be used to scale the 
+              overlap between the atom and each voxel.  If not specified, an 
+              occupancy of 1 is assumed.
+
+        img_params:
+            An object specifying any information that applies to the image as a 
+            whole, rather than to individual atoms.  This most importantly 
+            includes the dimensions of the image.
+
+    Returns:
+        A floating point array of dimension $(C, X, Y, Z)$, where $C$ is 
+        the number of channels specified by `img_params.channels` and $X$, $Y$, 
+        and $Z$ are the spatial dimensions specified by 
+        `img_params.grid.length_voxels`.
+    """
     img = _make_empty_image(img_params)
     grid = img_params.grid
 
     # Without this filter, `_find_voxels_possibly_contacting_sphere()` becomes 
     # a performance bottleneck.
     atoms = _discard_atoms_outside_image(atoms, grid)
+    atoms = img_params.assign_channels(atoms)
+
+    _check_channels(atoms, img_params.channels)
 
     for row in atoms.iter_rows(named=True):
         atom = _make_atom(row)
@@ -163,6 +258,17 @@ all atoms must be assigned at least one channel
     return atoms
 
 def get_voxel_center_coords(grid, voxels):
+    """\
+    Calculate the center coordinates of the given voxels.
+
+    Arguments:
+        grid:
+            An object specifying the size and location of each voxel.
+            
+        voxels:
+            An integer array of dimension (N, 3) specifying the indices of 
+            the voxels to calculate coordinates for.
+    """
     # There are two things to keep in mind when passing arrays between 
     # python/numpy and C++/Eigen:
     #
@@ -192,12 +298,13 @@ def get_voxel_center_coords(grid, voxels):
 
 def _check_channels(atoms, num_channels):
     channels = atoms['channels'].explode()
-    assert channels.min() >= 0
-    assert channels.max() < num_channels
+    if not channels.is_empty():
+        assert channels.min() >= 0
+        assert channels.max() < num_channels
 
 def _make_empty_image(img_params):
     shape = img_params.channels, *img_params.grid.shape
-    return np.zeros(shape, dtype=np.float32)
+    return np.zeros(shape, dtype=img_params.dtype)
 
 def _discard_atoms_outside_image(atoms, grid):
     max_r = atoms['radius_A'].max()
@@ -221,7 +328,7 @@ def _make_atom(row):
                 radius_A=row['radius_A'],
             ),
             channels=row['channels'],
-            occupancy=row['occupancy'],
+            occupancy=row.get('occupancy', 1.0),
     )
 
 class ValidationError(Exception):

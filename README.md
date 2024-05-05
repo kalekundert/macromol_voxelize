@@ -46,29 +46,32 @@ import polars as pl
 import macromol_voxelize as mmvox
 
 # Load the atoms in question.  These particular coordinates are for a 
-# methionine amino acid.
+# methionine amino acid.  This is a hard-coded dataframe for simplicity, but 
+# normally you'd use <https://github.com/kalekundert/macromol_dataframe> for 
+# this step.
 atoms = pl.DataFrame([
-        dict(element='N', x= 1.052, y=-1.937, z=-1.165, occupancy=1.0),
-        dict(element='C', x= 1.540, y=-0.561, z=-1.165, occupancy=1.0),
-        dict(element='C', x= 3.049, y=-0.521, z=-1.165, occupancy=1.0),
-        dict(element='O', x= 3.733, y=-1.556, z=-1.165, occupancy=1.0),
-        dict(element='C', x= 0.965, y= 0.201, z= 0.059, occupancy=1.0),
-        dict(element='C', x=-0.570, y= 0.351, z= 0.100, occupancy=1.0),
-        dict(element='S', x=-1.037, y= 1.495, z= 1.409, occupancy=1.0),
-        dict(element='C', x=-2.800, y= 1.146, z= 1.451, occupancy=1.0),
+        dict(element='N', x= 1.052, y=-1.937, z=-1.165),
+        dict(element='C', x= 1.540, y=-0.561, z=-1.165),
+        dict(element='C', x= 3.049, y=-0.521, z=-1.165),
+        dict(element='O', x= 3.733, y=-1.556, z=-1.165),
+        dict(element='C', x= 0.965, y= 0.201, z= 0.059),
+        dict(element='C', x=-0.570, y= 0.351, z= 0.100),
+        dict(element='S', x=-1.037, y= 1.495, z= 1.409),
+        dict(element='C', x=-2.800, y= 1.146, z= 1.451),
 ])
 
-# Add a "radius" column to the dataframe.  This function simply gives each atom 
-# the same radius, but you could calculate radii however you want.
+# Add a "radius_A" column to the dataframe.  (The "_A" suffix means "in units 
+# of angstroms".)  This function simply gives each atom the same radius, but 
+# you could calculate radii however you want.
 atoms = mmvox.set_atom_radius_A(atoms, 0.75)
 
 # Add a "channels" column to the dataframe.  This function assigns channels by 
 # matching a series of regular expressions against each atom's element name, 
 # but again you could do this however you want.
-atoms = mmvox.set_atom_channels_by_element(atoms, ['C', 'N', 'O', 'S|Se'])
+atoms = mmvox.set_atom_channels_by_element(atoms, ['C', 'N', 'O', 'S|SE'])
 
 # Create the 3D image.  Note that this step is not specific to macromolecules 
-# in any way.  It just expects a data frame with "x", "y", "z", "radius", 
+# in any way.  It just expects a data frame with "x", "y", "z", "radius_A", 
 # "occupancy", and "channels" columns.
 img_params = mmvox.ImageParams(
         channels=4,

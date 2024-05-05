@@ -16,6 +16,7 @@ from pytest import approx
 
 with_py = pff.Namespace()
 with_math = pff.Namespace('from math import *')
+with_np = pff.Namespace(with_math, 'import numpy as np')
 with_mmvox = pff.Namespace('from macromol_voxelize import *')
 
 def grid(params):
@@ -80,9 +81,6 @@ def atoms(params):
         for k in header
     })
 
-    if 'occupancy' not in df.columns:
-        df = df.with_columns(occupancy=pl.lit(1.0))
-
     return df
 
 def index(params):
@@ -98,6 +96,10 @@ def image_params(params):
     return mmvox.ImageParams(
             channels=int(params.get('channels', '1')),
             grid=grid(params['grid']),
+            dtype=with_np.eval(params.get('dtype', 'np.float32')),
+            assign_channels=with_mmvox.eval(
+                params.get('assign_channels', 'lambda df: df'),
+            ),
     )
 
 def image(params):
@@ -155,6 +157,7 @@ def test_set_atom_channels_by_element(atoms, channels, kwargs, expected, error):
 def test_image_from_atoms(atoms, img_params, expected):
     img = mmvox.image_from_atoms(atoms, img_params)
     assert_images_match(img, expected)
+    assert img.dtype == img_params.dtype
 
 def test_make_empty_image():
     img_params = mmvox.ImageParams(
@@ -218,9 +221,9 @@ def test_add_atom_to_image_no_copy():
             occupancy=1,
     )
 
-    # `float64` is the wrong data type; `float32` is required.  The binding 
-    # code should notice the discrepancy and complain.
-    img = np.zeros((2, 3, 3, 3), dtype=np.float64)
+    # `float128` is an unsupported data type.  Instead of silently making a 
+    # copy, the binding code should notice the discrepancy and complain.
+    img = np.zeros((2, 3, 3, 3), dtype=np.float128)
 
     with pytest.raises(TypeError):
         _mmvox_cpp._add_atom_to_image(img, grid, atom)
