@@ -78,6 +78,7 @@ def render_view(
         channel_colors,
         axes=False,
         outline=False,
+        img=True,
         frame_ix=None,
         state=-1,
 ):
@@ -88,7 +89,11 @@ def render_view(
         atoms_x = atoms_i
         frame_xi = None
 
-    img = image_from_atoms(atoms_x, img_params)
+    if img:
+        img = image_from_atoms(atoms_x, img_params)
+    else:
+        img = None
+
     render_image(
             obj_names=obj_names,
             img=img,
