@@ -221,9 +221,9 @@ def test_add_atom_to_image_no_copy():
             occupancy=1,
     )
 
-    # `float128` is an unsupported data type.  Instead of silently making a 
-    # copy, the binding code should notice the discrepancy and complain.
-    img = np.zeros((2, 3, 3, 3), dtype=np.float128)
+    # Integer data types are not supported.  Instead of silently making a copy, 
+    # the binding code should notice the discrepancy and complain.
+    img = np.zeros((2, 3, 3, 3), dtype=np.int64)
 
     with pytest.raises(TypeError):
         _mmvox_cpp._add_atom_to_image(img, grid, atom)

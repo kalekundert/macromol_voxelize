@@ -19,11 +19,16 @@ jobs:
 
   test:
     name: Run tests
-    runs-on: ubuntu-latest
 
     strategy:
       matrix:
         python-version: ['3.10', '3.x']
+        operating-system:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    runs-on: ${{ matrix.operating-system }}
 
     steps:
       - uses: actions/checkout@v4
@@ -42,7 +47,7 @@ jobs:
       - name: Store coverage data
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-data-${{ matrix.python-version }}
+          name: coverage-data-${{ matrix.operating-system }}-${{ matrix.python-version }}
           path: .coverage.*
           if-no-files-found: ignore
 
@@ -62,11 +67,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           pattern: coverage-data-*
-      
+
       - name: Combine coverage data
         run: |
           python -m coverage combine coverage-data-*
-          python -m coverage xml
+          python -m coverage xml --debug=pathmap
           python -m coverage report | sed 's/^/    /' >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Codecov report

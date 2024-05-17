@@ -84,6 +84,13 @@ branch = true
 parallel = true
 source = ['macromol_voxelize']
 
+[tool.coverage.paths]
+source = [
+    'macromol_voxelize/',
+    '/Users/runner/work/macromol_voxelize/macromol_voxelize/macromol_voxelize',
+    'D:\a\macromol_voxelize\macromol_voxelize\macromol_voxelize',
+]
+
 [tool.coverage.report]
 exclude_lines = [
     "^\\s*raise AssertionError\\b",
