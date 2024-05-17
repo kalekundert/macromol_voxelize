@@ -169,7 +169,9 @@ def set_atom_radius_A(atoms: pl.DataFrame, radius_A: float):
         The input dataframe, with a new *radius_A* column.  Every row in this 
         column will have the same value.
     """
-    return atoms.with_columns(radius_A=radius_A)
+    # Include the `float()` call to raise an error if the wrong type is 
+    # provided, instead of silently filling the dataframe with nonsense.
+    return atoms.with_columns(radius_A=float(radius_A))
 
 def set_atom_channels_by_element(
         atoms: pl.DataFrame,
