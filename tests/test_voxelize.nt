@@ -255,6 +255,31 @@ test_discard_atoms_outside_image:
       > 0 0.5  0    -1.49  0
       > 0 0.5  0     0     1.49
       > 0 0.5  0     0    -1.49
+  -
+    atoms:
+      > c  x     y     z
+      > 0  1.49  0     0
+      > 0 -1.49  0     0
+      > 0  1.51  0     0
+      > 0 -1.51  0     0
+      > 0  0     1.49  0
+      > 0  0    -1.49  0
+      > 0  0     1.51  0
+      > 0  0    -1.51  0
+      > 0  0     0     1.49
+      > 0  0     0    -1.49
+      > 0  0     0     1.51
+      > 0  0     0    -1.51
+    max_r: 0.5
+    grid: 2
+    expected:
+      > c  x     y     z
+      > 0  1.49  0     0
+      > 0 -1.49  0     0
+      > 0  0     1.49  0
+      > 0  0    -1.49  0
+      > 0  0     0     1.49
+      > 0  0     0    -1.49
 
 test_discard_voxels_outside_image:
   -
@@ -803,7 +828,7 @@ test_image_from_atoms:
       1 0 1 1: 1/2
       1 1 1 1: 1/2
   -
-    id: assign-channels
+    id: process-filtered-atoms
     atoms:
       > element r    x    y    z
       > C       0.5  0.0 -0.5 -0.5
@@ -811,13 +836,63 @@ test_image_from_atoms:
     img_params:
       grid: 2
       channels: 2
-      assign_channels:
-        > lambda df: set_atom_channels_by_element(df, channels=['C', 'N'])
+      process_filtered_atoms:
+        > lambda df: set_atom_channels_by_element(df, channels=[['C'], ['N']])
     expected:
       0 0 0 0: 1/2
       0 1 0 0: 1/2
       1 0 1 1: 1/2
       1 1 1 1: 1/2
+
+test_check_channels:
+  -
+    id: ok
+    atoms:
+      > c
+      > 0
+      > 1
+    num_channels: 2
+    error: none
+  -
+    id: too-small
+    atoms:
+      > c
+      > 0
+      > -1
+    num_channels: 2
+    error:
+      type: ValidationError
+      message: channel indices must be between 0 and 1, not -1
+  -
+    id: too-big
+    atoms:
+      > c
+      > 0
+      > 2
+    num_channels: 2
+    error:
+      type: ValidationError
+      message: channel indices must be between 0 and 1, not 2
+
+test_check_max_radius_A:
+  -
+    id: ok
+    atoms:
+      > r
+      > 1
+      > 1
+    max_radius_A: 1
+    error: none
+  -
+    id: too-big
+    atoms:
+      > r
+      > 1
+      > 1
+    max_radius_A: 0.99
+    error:
+      type: ValidationError
+      message: atom radii must not exceed
 
 test_set_atom_radius_A:
   -
@@ -831,84 +906,114 @@ test_set_atom_radius_A:
 
 test_set_atom_channels_by_element:
   -
-    id: matches-all
+    id: channels-distinct
     atoms:
       > element x y z
-      > C       1 2 3
-      > N       2 3 4
-      > O       3 4 5
-      > S       4 5 6
+      > N       1 2 3
+      > C       2 3 4
+      > C       3 4 5
+      > O       4 5 6
     channels:
-      [C, N, O, .*]
+      [[C], [N], [O]]
     expected:
       > element x y z c
-      > C       1 2 3 0,3
-      > N       2 3 4 1,3
-      > O       3 4 5 2,3
-      > S       4 5 6 3
+      > N       1 2 3 1
+      > C       2 3 4 0
+      > C       3 4 5 0
+      > O       4 5 6 2
   -
-    id: matches-first
+    id: channels-overlapping
     atoms:
       > element x y z
-      > C       1 2 3
-      > N       2 3 4
-      > O       3 4 5
-      > S       4 5 6
+      > N       1 2 3
+      > C       2 3 4
+      > C       3 4 5
+      > O       4 5 6
     channels:
-      [C, N, O, .*]
+      [[C], [N, O]]
+    expected:
+      > element x y z c
+      > N       1 2 3 1
+      > C       2 3 4 0
+      > C       3 4 5 0
+      > O       4 5 6 1
+  -
+    id: channels-star
+    atoms:
+      > element x y z
+      > N       1 2 3
+      > C       2 3 4
+      > C       3 4 5
+      > O       4 5 6
+    channels:
+      [[C], [*]]
+    expected:
+      > element x y z c
+      > N       1 2 3 1
+      > C       2 3 4 0
+      > C       3 4 5 0
+      > O       4 5 6 1
+  -
+    id: channels-substr-match
+    # This test case was more relevant when I was using regular expressions to 
+    # match element names, but there's no reason to get rid of it.
+    atoms:
+      > element x y z
+      > S       1 2 3
+      > SE      2 3 4
+      > SI      3 4 5
+    channels:
+      [[S, SE]]
     kwargs:
-      first_match: True
+      drop_missing_atoms: True
     expected:
       > element x y z c
-      > C       1 2 3 0
-      > N       2 3 4 1
-      > O       3 4 5 2
-      > S       4 5 6 3
+      > S       1 2 3 0
+      > SE      2 3 4 0
   -
-    id: missing-atoms-forbid
+    id: missing-atoms-err
     atoms:
       > element x y z
-      > C       1 2 3
-      > N       2 3 4
-      > O       3 4 5
+      > N       1 2 3
+      > C       2 3 4
+      > C       3 4 5
       > S       4 5 6
+    channels:
+      [[C], [N], [O]]
+    error:
+      type: ValidationError
+      message:
+        - all atoms must be assigned at least one channel
+        - channels: [['C'], ['N'], ['O']]
+        - unassigned elements: ['S']
+  -
+    id: missing-atoms-drop
+    atoms:
+      > element x y z
+      > N       1 2 3
+      > C       2 3 4
+      > C       3 4 5
+      > S       4 5 6
+    channels:
+      [[C], [N], [O]]
+    kwargs:
+      drop_missing_atoms: True
+    expected:
+      > element x y z c
+      > N       1 2 3 1
+      > C       2 3 4 0
+      > C       3 4 5 0
+  -
+    id: err-str-not-list
+    atoms:
+      > element x y z
+      > N       3 4 5
+      > C       1 2 3
+      > C       2 3 4
+      > O       4 5 6
     channels:
       [C, N, O]
     error:
       type: ValidationError
       message:
-        - all atoms must be assigned at least one channel
-        - channels: ['C', 'N', 'O']
-        - unassigned elements: ['S']
-  -
-    id: missing-atoms-allow
-    atoms:
-      > element x y z
-      > C       1 2 3
-      > N       2 3 4
-      > O       3 4 5
-      > S       4 5 6
-    channels:
-      [C, N, O]
-    kwargs:
-      allow_missing_atoms: True
-    expected:
-      > element x y z c
-      > C       1 2 3 0
-      > N       2 3 4 1
-      > O       3 4 5 2
-  -
-    id: partial
-    atoms:
-      > element x y z
-      > S       1 2 3
-      > Se      2 3 4
-      > Si      3 4 5
-    channels:
-      [S|Se]
-    kwargs:
-      allow_missing_atoms: True
-    expected:
-      > element x y z c
-      > S       1 2 3 0
-      > Se      2 3 4 0
+        - expected list of elements, found str: 'C'

@@ -22,6 +22,8 @@ jobs:
 
     strategy:
       matrix:
+        # python-version: ['3.10']
+        # operating-system: ['macos-latest']
         python-version: ['3.10', '3.x']
         operating-system:
           - ubuntu-latest
@@ -40,9 +42,14 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .[test] coverage[toml]
+          python -m pip install .[test] coverage[toml]
+          
+      # - name: Setup tmate session
+      #   uses: mxschmitt/action-tmate@v3
+
       - name: Run test suite
         run: |
+          cd tests
           python -m coverage run -m pytest
       - name: Store coverage data
         uses: actions/upload-artifact@v4
@@ -51,10 +58,51 @@ jobs:
           path: .coverage.*
           if-no-files-found: ignore
 
+  test-llvm-cov:
+    name: Run tests (with C++ coverage)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Run test suite
+        run: |
+          sudo apt install llvm
+          python -m pip install --upgrade pip
+
+          export CC=$(which clang)
+          export CXX=$(which clang++)
+          export CFLAGS='-fprofile-instr-generate -fcoverage-mapping'
+          
+          python -m pip install '.[test]'
+          LLVM_PROFILE_FILE="mmvox.profraw" python -m pytest
+
+          # https://stackoverflow.com/questions/50613601/getting-llvm-cov-to-talk-to-codecov-io
+          llvm-profdata merge -sparse mmvox.profraw -o mmvox.profdata
+          llvm-cov show \
+            macromol_voxelize/_voxelize.*.so \
+            -instr-profile=mmvox.profdata \
+            macromol_voxelize/_voxelize.cc \
+            > coverage-llvm.txt
+          cat coverage-llvm.txt
+
+      - name: Store coverage data
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-data-llvm
+          path: coverage-llvm.txt
+          if-no-files-found: ignore
+
   coverage:
     name: Report coverage
     runs-on: ubuntu-latest
-    needs: test
+    needs:
+      - test
+      - test-llvm-cov
 
     steps:
       - uses: actions/checkout@v4
@@ -72,7 +120,7 @@ jobs:
         run: |
           python -m coverage combine coverage-data-*
           python -m coverage xml --debug=pathmap
-          python -m coverage report | sed 's/^/    /' >> $GITHUB_STEP_SUMMARY
+          python -m coverage report
 
       - name: Upload Codecov report
         uses: codecov/codecov-action@v4

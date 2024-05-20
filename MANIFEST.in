@@ -1,2 +1,2 @@
-graft macromol_voxelize/vendored
-
+graft macromol_voxelize/vendored/Eigen/Eigen
+include macromol_voxelize/vendored/overlap/overlap.hpp

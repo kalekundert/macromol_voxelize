@@ -8,10 +8,11 @@ import pytest
 import parametrize_from_file as pff
 import pickle
 
-from macromol_voxelize import Sphere, Atom, Grid
+from macromol_voxelize._voxelize import Sphere, Atom, Grid
 from macromol_dataframe.testing import coord, coords
 from io import StringIO
 from itertools import product
+from contextlib import nullcontext
 from pytest import approx
 
 with_py = pff.Namespace()
@@ -97,8 +98,8 @@ def image_params(params):
             channels=int(params.get('channels', '1')),
             grid=grid(params['grid']),
             dtype=with_np.eval(params.get('dtype', 'np.float32')),
-            assign_channels=with_mmvox.eval(
-                params.get('assign_channels', 'lambda df: df'),
+            process_filtered_atoms=with_mmvox.eval(
+                params.get('process_filtered_atoms', 'lambda df: df'),
             ),
     )
 
@@ -144,6 +145,7 @@ def test_set_atom_channels_by_element(atoms, channels, kwargs, expected, error):
         pl.testing.assert_frame_equal(
                 actual, expected,
                 check_column_order=False,
+                check_dtype=False,
         )
 
 
@@ -175,25 +177,156 @@ def test_make_empty_image():
     )
 
 @pff.parametrize(
-        schema=pff.cast(
-            atoms=atoms,
-            grid=grid,
-            expected=atoms,
-        ),
+        schema=[
+            pff.cast(
+                atoms=atoms,
+                max_r=float,
+                grid=grid,
+                expected=atoms,
+            ),
+            pff.defaults(
+                max_r=None,
+            )
+        ],
 )
-def test_discard_atoms_outside_image(atoms, grid, expected):
-    actual = _mmvox._discard_atoms_outside_image(atoms, grid)
+def test_discard_atoms_outside_image(atoms, max_r, grid, expected):
+    actual = _mmvox._discard_atoms_outside_image(atoms, grid, max_r)
     pl.testing.assert_frame_equal(actual, expected)
 
-def test_make_atom():
-    row = dict(channels=[0], radius_A=0.5, x=1, y=2, z=3, occupancy=0.8)
-    atom = _mmvox._make_atom(row)
+@pff.parametrize(
+        schema=pff.cast(
+            atoms=atoms,
+            num_channels=int,
+            error=with_mmvox.error,
+        )
+)
+def test_check_channels(atoms, num_channels, error):
+    with error:
+        _mmvox._check_channels(atoms, num_channels)
 
-    assert atom.sphere.center_A == approx([1, 2, 3])
-    assert atom.sphere.radius_A == approx(0.5)
-    assert atom.channels == [0]
-    assert atom.occupancy == approx(0.8)
+@pff.parametrize(
+        schema=pff.cast(
+            atoms=atoms,
+            max_radius_A=float,
+            error=with_mmvox.error,
+        )
+)
+def test_check_max_radius_A(atoms, max_radius_A, error):
+    with error:
+        _mmvox._check_max_radius_A(atoms, max_radius_A)
 
+
+def test_add_atoms_to_image_err_wrong_type():
+    atoms = pl.DataFrame([
+        dict(x=0.0, y=0.0, z=0.0, radius_A=0.5, channels=[0], occupancy=1.0),
+    ])
+    grid = Grid(length_voxels=2, resolution_A=1)
+    img_params = mmvox.ImageParams(channels=2, grid=grid)
+    img = _mmvox._make_empty_image(img_params)
+
+    with pytest.raises(RuntimeError, match="atoms must be given as Arrow table"):
+        _mmvox._add_atoms_to_image(img, grid, atoms)
+
+@pytest.mark.parametrize(
+        'row', [
+            dict(x=0.0, y=0.0, z=0.0, radius_A=0.5, channels=[0], occupancy=1.0, ok=True),
+
+            # *x* and *y*: out of order
+            dict(y=0.0, x=0.0, z=0.0, radius_A=0.5, channels=[0], occupancy=1.0),
+
+            # *radius*: int instead of float
+            dict(x=0.0, y=0.0, z=0.0, radius_A=1, channels=[0], occupancy=1.0),
+
+            # *channels*: int instead of list[int]
+            dict(x=0.0, y=0.0, z=0.0, radius_A=1, channels=0, occupancy=1.0),
+        ]
+)
+def test_add_atoms_to_image_err_wrong_schema(row):
+    if row.pop('ok', False):
+        error = nullcontext()
+    else:
+        error = pytest.raises(RuntimeError, match="atoms dataframe has unexpected schema")
+
+    atoms = pl.DataFrame([row])
+    grid = Grid(length_voxels=2, resolution_A=1)
+    img_params = mmvox.ImageParams(channels=2, grid=grid)
+    img = _mmvox._make_empty_image(img_params)
+
+    with error:
+        _mmvox._add_atoms_to_image(img, grid, atoms.to_arrow())
+
+@pytest.mark.parametrize(
+        'bad_row', [
+            dict(x=None, y=0.0,  z=0.0,  radius_A=0.5,  channels=[0],  occupancy=1.0),
+            dict(x=0.0,  y=None, z=0.0,  radius_A=0.5,  channels=[0],  occupancy=1.0),
+            dict(x=0.0,  y=0.0,  z=None, radius_A=0.5,  channels=[0],  occupancy=1.0),
+            dict(x=0.0,  y=0.0,  z=0.0,  radius_A=None, channels=[0],  occupancy=1.0),
+            dict(x=0.0,  y=0.0,  z=0.0,  radius_A=0.5,  channels=None, occupancy=1.0),
+            dict(x=0.0,  y=0.0,  z=0.0,  radius_A=0.5,  channels=[0],  occupancy=None),
+        ],
+)
+def test_add_atoms_to_image_err_null(bad_row):
+    atoms = pl.DataFrame([
+        dict(x=0.0, y=0.0, z=0.0, radius_A=0.5, channels=[0], occupancy=1.0),
+        bad_row,
+    ])
+    grid = Grid(length_voxels=2, resolution_A=1)
+    img_params = mmvox.ImageParams(channels=2, grid=grid)
+    img = _mmvox._make_empty_image(img_params)
+
+    with pytest.raises(RuntimeError, match="atoms dataframe contains null values"):
+        _mmvox._add_atoms_to_image(img, grid, atoms.to_arrow())
+
+def test_add_atoms_to_image_err_no_copy():
+    atoms = pl.DataFrame([
+        dict(x=0.0, y=0.0, z=0.0, radius_A=0.5, channels=[0], occupancy=1.0),
+    ])
+    grid = Grid(length_voxels=2, resolution_A=1)
+
+    # Integer data types are not supported.  Instead of silently making a copy, 
+    # the binding code should notice the discrepancy and complain.
+    img = np.zeros((2, 3, 3, 3), dtype=np.int64)
+
+    with pytest.raises(TypeError):
+        _mmvox._add_atoms_to_image(img, grid, atoms.to_arrow())
+
+def test_add_atoms_to_image_chunks():
+    # Deliberately make a dataframe with multiple, misaligned chunks:
+    x = pl.Series("x", [-0.5, 0.5])
+    x.append(pl.Series([-0.5, 0.5]))
+    x.append(pl.Series([-0.5, 0.5]))
+
+    y = pl.Series("y", [-0.5, -0.5, 0.5])
+    y.append(pl.Series([0.5, -0.5, -0.5]))
+
+    z = pl.Series("z", [-0.5, -0.5, -0.5, -0.5, 0.5, 0.5])
+
+    atoms = (
+            pl.DataFrame([x, y, z])
+            .with_columns(
+                radius_A=0.49,
+                channels=[0],
+                occupancy=1.0
+            )
+    )
+    assert atoms.n_chunks('all') == [3, 2, 1, 1, 1, 1]
+
+    grid = Grid(length_voxels=2, resolution_A=1)
+    img_params = mmvox.ImageParams(channels=1, grid=grid)
+    img = _mmvox._make_empty_image(img_params)
+
+    _mmvox._add_atoms_to_image(img, grid, atoms.to_arrow())
+
+    expected = {
+            (0,0,0,0): 1,
+            (0,1,0,0): 1,
+            (0,0,1,0): 1,
+            (0,1,1,0): 1,
+            (0,0,0,1): 1,
+            (0,1,0,1): 1,
+    }
+
+    assert_images_match(img, expected)
 
 @pff.parametrize(
         schema=pff.cast(grid=grid, atom=atom, expected=image)
@@ -207,7 +340,7 @@ def test_add_atom_to_image(grid, atom, expected):
     _mmvox_cpp._add_atom_to_image(img, grid, atom)
     assert_images_match(img, expected)
 
-def test_add_atom_to_image_no_copy():
+def test_add_atom_to_image_err_no_copy():
     grid = Grid(
             length_voxels=3,
             resolution_A=1,

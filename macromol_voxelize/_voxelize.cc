@@ -1,11 +1,9 @@
-// How to compile
-// ==============
-// - A relatively fast recompilation command:
+// How to quickly recompile
+// ========================
+// - Start by installing normally, but without deleting all the intermediate 
+//   files.  This step will be as slow as a normal install:
 //
-// 	   $ pip install --no-deps --no-build-isolation --editable .
-//
-// 	 This only works if `setuptools` and `pybind11` are installed in the
-// 	 virtual environment in question.
+// 	   $ pip install --no-clean .
 //
 // - After one `pip install` fails, you can copy the compiler command from the 
 //   error message.  This doesn't actually update the python installation, 
@@ -14,6 +12,8 @@
 #include <overlap.hpp>
 
 #include <Eigen/Dense>
+#include <arrow/python/pyarrow.h>
+#include <arrow/api.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/operators.h>
 #include <pybind11/eigen.h>
@@ -295,8 +295,84 @@ _add_atom_to_image(
 	}
 }
 
+template <typename T>
+void
+_add_atoms_to_image(
+		py::array_t<T> img,
+		Grid const & grid,
+		py::object const & atoms_py) {
+
+	auto result = arrow::py::unwrap_table(atoms_py.ptr());
+	if (!result.ok()) {
+		throw std::runtime_error("atoms must be given as Arrow table");
+	}
+	std::shared_ptr<arrow::Table> atoms = result.ValueOrDie();
+
+	// Check that the table has the schema we expect.
+	std::vector<std::shared_ptr<arrow::Field>> schema_cols = {
+      arrow::field("x", arrow::float64()),
+      arrow::field("y", arrow::float64()),
+      arrow::field("z", arrow::float64()),
+      arrow::field("radius_A", arrow::float64()),
+      arrow::field("channels", arrow::large_list(arrow::int64())),
+      arrow::field("occupancy", arrow::float64()),
+	};
+
+  auto expected_schema = std::make_shared<arrow::Schema>(schema_cols);
+
+  if (!expected_schema->Equals(*atoms->schema())) {
+		throw std::runtime_error("atoms dataframe has unexpected schema");
+  }
+
+	for (auto col: atoms->columns()) {
+		if (col->null_count() != 0) {
+			throw std::runtime_error("atoms dataframe contains null values");
+		}
+	}
+
+	// Iterate through all the atoms in the data frame, accounting for the fact 
+	// that the columns may not be contiguous, and add them all to the image.
+	arrow::TableBatchReader batch_reader(*atoms);
+	std::shared_ptr<arrow::RecordBatch> batch;
+
+	while (true) {
+		auto status = batch_reader.ReadNext(&batch);
+		if (!status.ok()) {
+				throw std::runtime_error("error reading atoms dataframe: " + status.ToString());
+		}
+		if (batch == nullptr) {
+			break;
+		}
+
+		auto x = std::static_pointer_cast<arrow::DoubleArray>(batch->column(0));
+		auto y = std::static_pointer_cast<arrow::DoubleArray>(batch->column(1));
+		auto z = std::static_pointer_cast<arrow::DoubleArray>(batch->column(2));
+		auto radius = std::static_pointer_cast<arrow::DoubleArray>(batch->column(3));
+		auto channels = std::static_pointer_cast<arrow::LargeListArray>(batch->column(4));
+		auto channels_flat = std::static_pointer_cast<arrow::Int64Array>(channels->values());
+		auto occupancy = std::static_pointer_cast<arrow::DoubleArray>(batch->column(5));
+
+		const auto *channels_ptr = channels_flat->raw_values();
+
+		for (int i = 0; i < batch->num_rows(); i++) {
+			const auto *j = channels_ptr + channels->value_offset(i);
+			const auto *k = channels_ptr + channels->value_offset(i + 1);
+			std::vector<int> channels_i(j, k);
+
+			Atom atom(
+					Sphere({x->Value(i), y->Value(i), z->Value(i)}, radius->Value(i)),
+					channels_i,
+					occupancy->Value(i)
+			);
+			_add_atom_to_image(img, grid, atom);
+		}
+	}
+}
+
 
 PYBIND11_MODULE(_voxelize, m) {
+	arrow::py::import_pyarrow();
+
 	// The classes exposed by this binding were originally frozen dataclasses, so 
 	// my goal was to implement that same API.  Some notes:
 	//
@@ -411,6 +487,20 @@ PYBIND11_MODULE(_voxelize, m) {
 		.def_readonly("resolution_A", &Grid::resolution_A)
 		.def_readonly("center_A", &Grid::center_A)
 		.def_property_readonly("shape", &Grid::get_shape);
+
+	m.def(
+			"_add_atoms_to_image",
+			&_add_atoms_to_image<float>,
+			py::arg("img").noconvert(),
+			py::arg("grid"),
+			py::arg("atoms")); 
+
+	m.def(
+			"_add_atoms_to_image",
+			&_add_atoms_to_image<double>,
+			py::arg("img").noconvert(),
+			py::arg("grid"),
+			py::arg("atoms")); 
 
 	m.def(
 			"_add_atom_to_image",
