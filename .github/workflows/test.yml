@@ -22,8 +22,6 @@ jobs:
 
     strategy:
       matrix:
-        # python-version: ['3.10']
-        # operating-system: ['macos-latest']
         python-version: ['3.10', '3.x']
         operating-system:
           - ubuntu-latest
@@ -42,14 +40,9 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install .[test] coverage[toml]
-          
-      # - name: Setup tmate session
-      #   uses: mxschmitt/action-tmate@v3
-
+          python -m pip install -e .[test] coverage[toml]
       - name: Run test suite
         run: |
-          cd tests
           python -m coverage run -m pytest
       - name: Store coverage data
         uses: actions/upload-artifact@v4
@@ -69,7 +62,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-      - name: Run test suite
+      - name: Install test dependencies
         run: |
           sudo apt install llvm
           python -m pip install --upgrade pip
@@ -78,7 +71,9 @@ jobs:
           export CXX=$(which clang++)
           export CFLAGS='-fprofile-instr-generate -fcoverage-mapping'
           
-          python -m pip install '.[test]'
+          python -m pip install -e '.[test]'
+      - name: Run test suite
+        run: |
           LLVM_PROFILE_FILE="mmvox.profraw" python -m pytest
 
           # https://stackoverflow.com/questions/50613601/getting-llvm-cov-to-talk-to-codecov-io
@@ -87,8 +82,7 @@ jobs:
             macromol_voxelize/_voxelize.*.so \
             -instr-profile=mmvox.profdata \
             macromol_voxelize/_voxelize.cc \
-            > coverage-llvm.txt
-          cat coverage-llvm.txt
+            | tee coverage-llvm.txt
 
       - name: Store coverage data
         uses: actions/upload-artifact@v4

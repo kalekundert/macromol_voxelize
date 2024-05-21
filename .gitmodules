@@ -1,8 +1,8 @@
-[submodule "macromol_voxelize/vendored/Eigen"]
-	path = macromol_voxelize/vendored/Eigen
+[submodule "src/vendored/Eigen"]
+	path = src/vendored/Eigen
 	url = https://gitlab.com/libeigen/eigen.git
 	shallow = true
-[submodule "macromol_voxelize/vendored/overlap"]
-	path = macromol_voxelize/vendored/overlap
+[submodule "src/vendored/overlap"]
+	path = src/vendored/overlap
 	url = https://github.com/severinstrobl/overlap.git
 	shallow = true

@@ -3,7 +3,6 @@ requires = [
   "setuptools>=42",
   "setuptools-scm",
   "pybind11>2.10",
-  "pyarrow",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -23,7 +22,6 @@ classifiers = [
 dependencies = [
   'numpy',
   'polars',
-  'pyarrow',
 ]
 
 [project.optional-dependencies]
@@ -53,6 +51,7 @@ doc = [
 
 [tool.setuptools]
 packages = ["macromol_voxelize"]
+package-dir = {"macromol_voxelize" = "src"}
 
 [tool.setuptools.dynamic]
 version = {attr = "macromol_voxelize.__version__"}
@@ -72,13 +71,13 @@ test-skip = [
 [tool.ruff.lint]
 select = ["F"]
 ignore = ["F405", "F403"]
-exclude = ["macromol_voxelize/vendored/*"]
+exclude = ["src/vendored/*"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 
 [tool.pytest.ini_options]
-addopts = "--ignore macromol_voxelize --doctest-modules --doctest-glob='*.rst'"
+addopts = "--ignore src --doctest-modules --doctest-glob='*.rst'"
 doctest_optionflags = 'NORMALIZE_WHITESPACE'
 
 [tool.coverage.run]
@@ -88,9 +87,9 @@ source = ['macromol_voxelize']
 
 [tool.coverage.paths]
 source = [
-    'macromol_voxelize/',
-    '/Users/runner/work/macromol_voxelize/macromol_voxelize/macromol_voxelize',
-    'D:\a\macromol_voxelize\macromol_voxelize\macromol_voxelize',
+    'src/',
+    '/Users/runner/work/macromol_voxelize/macromol_voxelize/src',
+    'D:\a\macromol_voxelize\macromol_voxelize\src',
 ]
 
 [tool.coverage.report]
@@ -100,5 +99,5 @@ exclude_lines = [
 ]
 
 [tool.semantic_release]
-version_variables = ['macromol_voxelize/__init__.py:__version__']
+version_variables = ['src/__init__.py:__version__']
 major_on_zero = false

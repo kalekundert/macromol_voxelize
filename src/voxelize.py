@@ -167,16 +167,22 @@ def image_from_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> Image:
     if 'occupancy' not in atoms:
         atoms = atoms.with_columns(occupancy=1.0)
 
-    atoms_table = (
-            atoms
-            .select(
-                pl.col('x', 'y', 'z', 'radius_A').cast(pl.Float64),
-                pl.col('channels').cast(pl.List(pl.Int64)),
-                pl.col('occupancy').cast(pl.Float64),
-            )
-            .to_arrow()
+    # If the input dataframe is in the right format, the casts will be no-ops 
+    # and the numpy conversions won't perform any copies.  However, this isn't 
+    # generally the case.  Data types can depend on the library used to load 
+    # the atoms, and filtering operations can prevent no-copy numpy conversions 
+    # unless the dataframe is rechunked afterwards.
+    _add_atoms_to_image(
+            img,
+            grid,
+            atoms['x'].cast(pl.Float64).to_numpy(),
+            atoms['y'].cast(pl.Float64).to_numpy(),
+            atoms['z'].cast(pl.Float64).to_numpy(),
+            atoms['radius_A'].cast(pl.Float64).to_numpy(),
+            atoms['channels'].list.explode().cast(pl.Int64).to_numpy(),
+            atoms['channels'].list.len().to_numpy(),  # no need for cast; len() always returns pl.Int32
+            atoms['occupancy'].cast(pl.Float64).to_numpy(),
     )
-    _add_atoms_to_image(img, grid, atoms_table)
 
     return img
         

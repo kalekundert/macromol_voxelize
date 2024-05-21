@@ -12,8 +12,6 @@
 #include <overlap.hpp>
 
 #include <Eigen/Dense>
-#include <arrow/python/pyarrow.h>
-#include <arrow/api.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/operators.h>
 #include <pybind11/eigen.h>
@@ -22,6 +20,7 @@
 #include <string>
 #include <vector>
 #include <tuple>
+#include <cstdint>
 #include <stdexcept>
 #include <sstream>
 #include <iostream>
@@ -47,21 +46,21 @@ scalar_t static const FUDGE_FACTOR = 1 + 1e-6;
 
 struct Atom {
 
-	Atom(Sphere sphere, std::vector<int> channels, scalar_t occupancy):
+	Atom(Sphere sphere, std::vector<int64_t> channels, scalar_t occupancy):
 		sphere(sphere), channels(channels), occupancy(occupancy) {}
 
 	Sphere const sphere;
-	std::vector<int> const channels;
+	std::vector<int64_t> const channels;
 	scalar_t const occupancy;
 };
 
 struct Grid {
 
 	Grid(
-        int length_voxels,
-        scalar_t resolution_A,
-        vector_t const & center_A = {0, 0, 0}
-    ):
+			int length_voxels,
+			scalar_t resolution_A,
+			vector_t const & center_A = {0, 0, 0}
+	):
 		length_voxels(length_voxels),
 		resolution_A(resolution_A),
 		length_A(length_voxels * resolution_A),
@@ -80,12 +79,12 @@ struct Grid {
 
 template < class T >
 std::ostream& operator << (std::ostream& os, std::vector<T> const & v) {
-    os << "[";
-		for (auto const &item: v) {
-        os << " " << item;
-		}
-    os << "]";
-    return os;
+	os << "[";
+	for (auto const &item: v) {
+		os << " " << item;
+	}
+	os << "]";
+	return os;
 }
 
 std::ostream& operator << (std::ostream& os, vector_t const & vec) {
@@ -100,27 +99,27 @@ std::ostream& operator << (std::ostream& os, vector_t const & vec) {
 			"]");
 
 	os << vec.transpose().format(repr);
-    return os;
+	return os;
 }
 
 std::ostream& operator << (std::ostream& os, Sphere const & sphere) {
-    os << "Sphere(center_A=" << sphere.center <<
-               ", radius_A=" << sphere.radius << ")";
-    return os;
+	os << "Sphere(center_A=" << sphere.center <<
+	           ", radius_A=" << sphere.radius << ")";
+	return os;
 }
 
 std::ostream& operator << (std::ostream& os, Atom const & atom) {
-    os << "Atom(sphere=" << atom.sphere <<
-             ", channels=" << atom.channels <<
-             ", occupancy=" << atom.occupancy << ")";
-    return os;
+	os << "Atom(sphere=" << atom.sphere <<
+	         ", channels=" << atom.channels <<
+	         ", occupancy=" << atom.occupancy << ")";
+	return os;
 }
 
 std::ostream& operator << (std::ostream& os, Grid const & grid) {
-    os << "Grid(length_voxels=" << grid.length_voxels <<
-             ", resolution_A=" << grid.resolution_A <<
-             ", center_A=" << grid.center_A << ")";
-    return os;
+	os << "Grid(length_voxels=" << grid.length_voxels <<
+	         ", resolution_A=" << grid.resolution_A <<
+	         ", center_A=" << grid.center_A << ")";
+	return os;
 }
 
 
@@ -289,9 +288,9 @@ _add_atom_to_image(
 		// really expect this message to ever be printed.
 
 		std::cerr << "numerical instability in overlap calculation: "
-            << "sum of all overlap volumes (" << total_overlap_A3 << " A^3) "
-            << "differs from sphere volume (" << atom.sphere.volume << " A^3)"
-            << std::endl;
+		          << "sum of all overlap volumes (" << total_overlap_A3 << " A^3) "
+		          << "differs from sphere volume (" << atom.sphere.volume << " A^3)"
+		          << std::endl;
 	}
 }
 
@@ -300,78 +299,54 @@ void
 _add_atoms_to_image(
 		py::array_t<T> img,
 		Grid const & grid,
-		py::object const & atoms_py) {
+		py::array_t<scalar_t> x,
+		py::array_t<scalar_t> y,
+		py::array_t<scalar_t> z,
+		py::array_t<scalar_t> radius_A,
+		py::array_t<int64_t, py::array::f_style | py::array::forcecast> channels_flat,
+		py::array_t<uint32_t> channel_lengths,
+		py::array_t<scalar_t> occupancy) {
 
-	auto result = arrow::py::unwrap_table(atoms_py.ptr());
-	if (!result.ok()) {
-		throw std::runtime_error("atoms must be given as Arrow table");
-	}
-	std::shared_ptr<arrow::Table> atoms = result.ValueOrDie();
+	auto x_getter = x.template unchecked<1>();
+	auto y_getter = y.template unchecked<1>();
+	auto z_getter = z.template unchecked<1>();
+	auto r_getter = radius_A.template unchecked<1>();
+	auto channel_getter = channels_flat.template unchecked<1>();
+	auto channel_len_getter = channel_lengths.template unchecked<1>();
+	auto occupancy_getter = occupancy.template unchecked<1>();
 
-	// Check that the table has the schema we expect.
-	std::vector<std::shared_ptr<arrow::Field>> schema_cols = {
-      arrow::field("x", arrow::float64()),
-      arrow::field("y", arrow::float64()),
-      arrow::field("z", arrow::float64()),
-      arrow::field("radius_A", arrow::float64()),
-      arrow::field("channels", arrow::large_list(arrow::int64())),
-      arrow::field("occupancy", arrow::float64()),
+	auto n = x_getter.size();
+	auto check_n = [&] (auto const & getter) {
+		if (getter.size() != n) {
+			throw std::runtime_error("atom arrays must all be the same size");
+		}
 	};
 
-  auto expected_schema = std::make_shared<arrow::Schema>(schema_cols);
+	check_n(y_getter);
+	check_n(z_getter);
+	check_n(r_getter);
+	check_n(channel_len_getter);
+	check_n(occupancy_getter);
 
-  if (!expected_schema->Equals(*atoms->schema())) {
-		throw std::runtime_error("atoms dataframe has unexpected schema");
-  }
+	uint32_t channel_cursor = 0;
 
-	for (auto col: atoms->columns()) {
-		if (col->null_count() != 0) {
-			throw std::runtime_error("atoms dataframe contains null values");
-		}
-	}
+	for (auto i = 0; i < x_getter.shape(0); i++) {
+		const int64_t *begin = channel_getter.data(channel_cursor);
+		channel_cursor += channel_len_getter(i);
+		const int64_t *end = channel_getter.data(channel_cursor);
+		std::vector<int64_t> channels_i(begin, end);
 
-	// Iterate through all the atoms in the data frame, accounting for the fact 
-	// that the columns may not be contiguous, and add them all to the image.
-	arrow::TableBatchReader batch_reader(*atoms);
-	std::shared_ptr<arrow::RecordBatch> batch;
-
-	while (true) {
-		auto status = batch_reader.ReadNext(&batch);
-		if (!status.ok()) {
-				throw std::runtime_error("error reading atoms dataframe: " + status.ToString());
-		}
-		if (batch == nullptr) {
-			break;
-		}
-
-		auto x = std::static_pointer_cast<arrow::DoubleArray>(batch->column(0));
-		auto y = std::static_pointer_cast<arrow::DoubleArray>(batch->column(1));
-		auto z = std::static_pointer_cast<arrow::DoubleArray>(batch->column(2));
-		auto radius = std::static_pointer_cast<arrow::DoubleArray>(batch->column(3));
-		auto channels = std::static_pointer_cast<arrow::LargeListArray>(batch->column(4));
-		auto channels_flat = std::static_pointer_cast<arrow::Int64Array>(channels->values());
-		auto occupancy = std::static_pointer_cast<arrow::DoubleArray>(batch->column(5));
-
-		const auto *channels_ptr = channels_flat->raw_values();
-
-		for (int i = 0; i < batch->num_rows(); i++) {
-			const auto *j = channels_ptr + channels->value_offset(i);
-			const auto *k = channels_ptr + channels->value_offset(i + 1);
-			std::vector<int> channels_i(j, k);
-
-			Atom atom(
-					Sphere({x->Value(i), y->Value(i), z->Value(i)}, radius->Value(i)),
-					channels_i,
-					occupancy->Value(i)
-			);
-			_add_atom_to_image(img, grid, atom);
-		}
+		Atom atom(
+				Sphere({x_getter(i), y_getter(i), z_getter(i)}, r_getter(i)),
+				channels_i,
+				occupancy_getter(i)
+		);
+		_add_atom_to_image(img, grid, atom);
 	}
 }
 
 
 PYBIND11_MODULE(_voxelize, m) {
-	arrow::py::import_pyarrow();
 
 	// The classes exposed by this binding were originally frozen dataclasses, so 
 	// my goal was to implement that same API.  Some notes:
@@ -393,11 +368,11 @@ PYBIND11_MODULE(_voxelize, m) {
 				py::arg("radius_A"))
 		.def(
 				"__repr__",
-				[](Sphere const & sphere) { 
-                	std::stringstream ss;
-                    ss << sphere;
-                    return ss.str();
-                },
+				[](Sphere const & sphere) {
+					std::stringstream ss;
+					ss << sphere;
+					return ss.str();
+				},
 				py::is_operator())
 		.def(
 				py::pickle(
@@ -418,17 +393,17 @@ PYBIND11_MODULE(_voxelize, m) {
 
 	py::class_<Atom>(m, "Atom")
 		.def(
-				py::init<Sphere, std::vector<int>, scalar_t>(),
+				py::init<Sphere, std::vector<int64_t>, scalar_t>(),
 				py::arg("sphere"),
 				py::arg("channels"),
 				py::arg("occupancy"))
 		.def(
-                "__repr__",
-                [](Atom const & atom) {
-                	std::stringstream ss;
-                    ss << atom;
-                    return ss.str();
-                },
+				"__repr__",
+				[](Atom const & atom) {
+					std::stringstream ss;
+					ss << atom;
+					return ss.str();
+				},
 				py::is_operator())
 		.def(
 				py::pickle(
@@ -444,7 +419,7 @@ PYBIND11_MODULE(_voxelize, m) {
 						}
 						return Atom {
 								state[0].cast<Sphere>(), 
-								state[1].cast<std::vector<int>>(), 
+								state[1].cast<std::vector<int64_t>>(), 
 								state[2].cast<scalar_t>()};
 					}))
 		.def_readonly("sphere", &Atom::sphere)
@@ -458,12 +433,12 @@ PYBIND11_MODULE(_voxelize, m) {
 				py::arg("resolution_A"),
 				py::arg("center_A") = vector_t {0,0,0})
 		.def(
-                "__repr__",
-                [](Grid const & grid) {
-                	std::stringstream ss;
-                    ss << grid;
-                    return ss.str();
-                },
+				"__repr__",
+				[](Grid const & grid) {
+					std::stringstream ss;
+					ss << grid;
+					return ss.str();
+				},
 				py::is_operator())
 		.def(
 				py::pickle(
@@ -493,14 +468,26 @@ PYBIND11_MODULE(_voxelize, m) {
 			&_add_atoms_to_image<float>,
 			py::arg("img").noconvert(),
 			py::arg("grid"),
-			py::arg("atoms")); 
+			py::arg("x").noconvert(),
+			py::arg("y").noconvert(),
+			py::arg("z").noconvert(),
+			py::arg("radius_A").noconvert(),
+			py::arg("channels_flat").noconvert(),
+			py::arg("channel_lengths").noconvert(),
+			py::arg("occupancies").noconvert());
 
 	m.def(
 			"_add_atoms_to_image",
 			&_add_atoms_to_image<double>,
 			py::arg("img").noconvert(),
 			py::arg("grid"),
-			py::arg("atoms")); 
+			py::arg("x").noconvert(),
+			py::arg("y").noconvert(),
+			py::arg("z").noconvert(),
+			py::arg("radius_A").noconvert(),
+			py::arg("channels_flat").noconvert(),
+			py::arg("channel_lengths").noconvert(),
+			py::arg("occupancies").noconvert());
 
 	m.def(
 			"_add_atom_to_image",

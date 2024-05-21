@@ -12,7 +12,6 @@ from macromol_voxelize._voxelize import Sphere, Atom, Grid
 from macromol_dataframe.testing import coord, coords
 from io import StringIO
 from itertools import product
-from contextlib import nullcontext
 from pytest import approx
 
 with_py = pff.Namespace()
@@ -161,6 +160,48 @@ def test_image_from_atoms(atoms, img_params, expected):
     assert_images_match(img, expected)
     assert img.dtype == img_params.dtype
 
+def test_image_from_atoms_chunks():
+    # This test makes much more sense in the context of passing the Arrow table 
+    # directly to the C++ code.  I'm not doing that anymore, but this still 
+    # seems like a reasonable test case.  It checks that copies can occur when 
+    # they have to.
+
+    x = pl.Series("x", [-0.5, 0.5])
+    x.append(pl.Series([-0.5, 0.5]))
+    x.append(pl.Series([-0.5, 0.5]))
+
+    y = pl.Series("y", [-0.5, -0.5, 0.5])
+    y.append(pl.Series([0.5, -0.5, -0.5]))
+
+    z = pl.Series("z", [-0.5, -0.5, -0.5, -0.5, 0.5, 0.5])
+
+    atoms = (
+            pl.DataFrame([x, y, z])
+            .with_columns(
+                radius_A=0.49,
+                channels=[0],
+                occupancy=1.0
+            )
+    )
+    assert atoms.n_chunks('all') == [3, 2, 1, 1, 1, 1]
+
+    img_params = mmvox.ImageParams(
+            channels=1,
+            grid=Grid(length_voxels=2, resolution_A=1),
+    )
+    img = mmvox.image_from_atoms(atoms, img_params)
+
+    expected = {
+            (0,0,0,0): 1,
+            (0,1,0,0): 1,
+            (0,0,1,0): 1,
+            (0,1,1,0): 1,
+            (0,0,0,1): 1,
+            (0,1,0,1): 1,
+    }
+
+    assert_images_match(img, expected)
+
 def test_make_empty_image():
     img_params = mmvox.ImageParams(
             channels=2,
@@ -216,67 +257,6 @@ def test_check_max_radius_A(atoms, max_radius_A, error):
         _mmvox._check_max_radius_A(atoms, max_radius_A)
 
 
-def test_add_atoms_to_image_err_wrong_type():
-    atoms = pl.DataFrame([
-        dict(x=0.0, y=0.0, z=0.0, radius_A=0.5, channels=[0], occupancy=1.0),
-    ])
-    grid = Grid(length_voxels=2, resolution_A=1)
-    img_params = mmvox.ImageParams(channels=2, grid=grid)
-    img = _mmvox._make_empty_image(img_params)
-
-    with pytest.raises(RuntimeError, match="atoms must be given as Arrow table"):
-        _mmvox._add_atoms_to_image(img, grid, atoms)
-
-@pytest.mark.parametrize(
-        'row', [
-            dict(x=0.0, y=0.0, z=0.0, radius_A=0.5, channels=[0], occupancy=1.0, ok=True),
-
-            # *x* and *y*: out of order
-            dict(y=0.0, x=0.0, z=0.0, radius_A=0.5, channels=[0], occupancy=1.0),
-
-            # *radius*: int instead of float
-            dict(x=0.0, y=0.0, z=0.0, radius_A=1, channels=[0], occupancy=1.0),
-
-            # *channels*: int instead of list[int]
-            dict(x=0.0, y=0.0, z=0.0, radius_A=1, channels=0, occupancy=1.0),
-        ]
-)
-def test_add_atoms_to_image_err_wrong_schema(row):
-    if row.pop('ok', False):
-        error = nullcontext()
-    else:
-        error = pytest.raises(RuntimeError, match="atoms dataframe has unexpected schema")
-
-    atoms = pl.DataFrame([row])
-    grid = Grid(length_voxels=2, resolution_A=1)
-    img_params = mmvox.ImageParams(channels=2, grid=grid)
-    img = _mmvox._make_empty_image(img_params)
-
-    with error:
-        _mmvox._add_atoms_to_image(img, grid, atoms.to_arrow())
-
-@pytest.mark.parametrize(
-        'bad_row', [
-            dict(x=None, y=0.0,  z=0.0,  radius_A=0.5,  channels=[0],  occupancy=1.0),
-            dict(x=0.0,  y=None, z=0.0,  radius_A=0.5,  channels=[0],  occupancy=1.0),
-            dict(x=0.0,  y=0.0,  z=None, radius_A=0.5,  channels=[0],  occupancy=1.0),
-            dict(x=0.0,  y=0.0,  z=0.0,  radius_A=None, channels=[0],  occupancy=1.0),
-            dict(x=0.0,  y=0.0,  z=0.0,  radius_A=0.5,  channels=None, occupancy=1.0),
-            dict(x=0.0,  y=0.0,  z=0.0,  radius_A=0.5,  channels=[0],  occupancy=None),
-        ],
-)
-def test_add_atoms_to_image_err_null(bad_row):
-    atoms = pl.DataFrame([
-        dict(x=0.0, y=0.0, z=0.0, radius_A=0.5, channels=[0], occupancy=1.0),
-        bad_row,
-    ])
-    grid = Grid(length_voxels=2, resolution_A=1)
-    img_params = mmvox.ImageParams(channels=2, grid=grid)
-    img = _mmvox._make_empty_image(img_params)
-
-    with pytest.raises(RuntimeError, match="atoms dataframe contains null values"):
-        _mmvox._add_atoms_to_image(img, grid, atoms.to_arrow())
-
 def test_add_atoms_to_image_err_no_copy():
     atoms = pl.DataFrame([
         dict(x=0.0, y=0.0, z=0.0, radius_A=0.5, channels=[0], occupancy=1.0),
@@ -288,45 +268,16 @@ def test_add_atoms_to_image_err_no_copy():
     img = np.zeros((2, 3, 3, 3), dtype=np.int64)
 
     with pytest.raises(TypeError):
-        _mmvox._add_atoms_to_image(img, grid, atoms.to_arrow())
-
-def test_add_atoms_to_image_chunks():
-    # Deliberately make a dataframe with multiple, misaligned chunks:
-    x = pl.Series("x", [-0.5, 0.5])
-    x.append(pl.Series([-0.5, 0.5]))
-    x.append(pl.Series([-0.5, 0.5]))
-
-    y = pl.Series("y", [-0.5, -0.5, 0.5])
-    y.append(pl.Series([0.5, -0.5, -0.5]))
-
-    z = pl.Series("z", [-0.5, -0.5, -0.5, -0.5, 0.5, 0.5])
-
-    atoms = (
-            pl.DataFrame([x, y, z])
-            .with_columns(
-                radius_A=0.49,
-                channels=[0],
-                occupancy=1.0
-            )
-    )
-    assert atoms.n_chunks('all') == [3, 2, 1, 1, 1, 1]
-
-    grid = Grid(length_voxels=2, resolution_A=1)
-    img_params = mmvox.ImageParams(channels=1, grid=grid)
-    img = _mmvox._make_empty_image(img_params)
-
-    _mmvox._add_atoms_to_image(img, grid, atoms.to_arrow())
-
-    expected = {
-            (0,0,0,0): 1,
-            (0,1,0,0): 1,
-            (0,0,1,0): 1,
-            (0,1,1,0): 1,
-            (0,0,0,1): 1,
-            (0,1,0,1): 1,
-    }
-
-    assert_images_match(img, expected)
+        _mmvox._add_atoms_to_image(
+                img, grid,
+                atoms['x'].to_numpy(),
+                atoms['y'].to_numpy(),
+                atoms['z'].to_numpy(),
+                atoms['radius_A'].to_numpy(),
+                atoms['channels'].list.explode().cast(pl.Int32).to_numpy(),
+                atoms['channels'].list.len().to_numpy(),
+                atoms['occupancy'].to_numpy(),
+        )
 
 @pff.parametrize(
         schema=pff.cast(grid=grid, atom=atom, expected=image)
