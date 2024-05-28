@@ -200,7 +200,6 @@ def pick_channel_colors(sele, channels):
     color_channels = set_atom_channels_by_element(
             elem_colors,
             channels,
-            first_match=True,
     )
     most_common_colors = dict(
             color_channels
