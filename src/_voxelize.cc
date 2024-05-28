@@ -361,7 +361,7 @@ PYBIND11_MODULE(_voxelize, m) {
 	//   algorithms are easy to find.  But I decided not to, because I really 
 	//   don't have any need for it.
 
-	py::class_<Sphere>(m, "Sphere")
+	py::class_<Sphere>(m, "Sphere", py::module_local())
 		.def(
 				py::init<vector_t, scalar_t>(),
 				py::arg("center_A"),
@@ -391,7 +391,7 @@ PYBIND11_MODULE(_voxelize, m) {
 		.def_readonly("radius_A", &Sphere::radius)
 		.def_readonly("volume_A3", &Sphere::volume);
 
-	py::class_<Atom>(m, "Atom")
+	py::class_<Atom>(m, "Atom", py::module_local())
 		.def(
 				py::init<Sphere, std::vector<int64_t>, scalar_t>(),
 				py::arg("sphere"),
@@ -426,7 +426,7 @@ PYBIND11_MODULE(_voxelize, m) {
 		.def_readonly("channels", &Atom::channels)
 		.def_readonly("occupancy", &Atom::occupancy);
 	
-	py::class_<Grid>(m, "Grid")
+	py::class_<Grid>(m, "Grid", py::module_local())
 		.def(
 				py::init<int, scalar_t, vector_t>(),
 				py::arg("length_voxels"),
