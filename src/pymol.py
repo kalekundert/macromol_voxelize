@@ -80,6 +80,7 @@ def render_view(
         outline=False,
         img=True,
         frame_ix=None,
+        scale_alpha=False,
         state=-1,
 ):
     if frame_ix is not None:
@@ -102,6 +103,7 @@ def render_view(
             axes=axes,
             outline=outline,
             frame_xi=frame_xi,
+            scale_alpha=scale_alpha,
             state=state,
     )
 
@@ -114,6 +116,7 @@ def render_image(
         axes=False,
         outline=False,
         frame_xi=None,
+        scale_alpha=False,
         state=-1,
 ):
     view = cmd.get_view()
@@ -135,6 +138,9 @@ def render_image(
         # If `transparency_mode` is disabled (which is the default), CGOs will 
         # be opaque no matter what.
         cmd.set('transparency_mode', 1)
+
+        if scale_alpha:
+            img = img / img.max()
 
         voxels = cgo_voxels(img, grid, channel_colors)
         cmd.delete(obj_names['voxels'])
