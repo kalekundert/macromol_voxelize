@@ -282,6 +282,20 @@ all atoms must be assigned at least one channel
 
     return atoms
 
+def add_atom_channel_by_expr(
+        atoms: pl.DataFrame,
+        expr: pl.type_aliases.IntoExprColumn,
+        channel: int,
+):
+    expr_channel = (
+            pl.when(expr)
+            .then([channel])
+            .otherwise([])
+    )
+    return atoms.with_columns(
+            channels=pl.col('channels').list.concat(expr_channel)
+    )
+
 def get_voxel_center_coords(grid, voxels):
     """\
     Calculate the center coordinates of the given voxels.

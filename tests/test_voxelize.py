@@ -144,8 +144,56 @@ def test_set_atom_channels_by_element(atoms, channels, kwargs, expected, error):
         pl.testing.assert_frame_equal(
                 actual, expected,
                 check_column_order=False,
-                check_dtype=False,
+                check_dtypes=False,
         )
+
+def test_add_atom_channel_by_col():
+    atoms = pl.DataFrame([
+        dict(channels=[   ], a=False),
+        dict(channels=[0  ], a=False),
+        dict(channels=[  1], a=False),
+        dict(channels=[0,1], a=False),
+        dict(channels=[   ], a=True),
+        dict(channels=[0  ], a=True),
+        dict(channels=[  1], a=True),
+        dict(channels=[0,1], a=True),
+    ])
+    atoms = mmvox.add_atom_channel_by_expr(atoms, 'a', 2)
+
+    assert atoms.to_dicts() == [
+        dict(channels=[     ], a=False),
+        dict(channels=[0    ], a=False),
+        dict(channels=[  1  ], a=False),
+        dict(channels=[0,1  ], a=False),
+        dict(channels=[    2], a=True),
+        dict(channels=[0,  2], a=True),
+        dict(channels=[  1,2], a=True),
+        dict(channels=[0,1,2], a=True),
+    ]
+
+def test_add_atom_channel_by_expr():
+    atoms = pl.DataFrame([
+        dict(channels=[   ], a=3),
+        dict(channels=[0  ], a=3),
+        dict(channels=[  1], a=3),
+        dict(channels=[0,1], a=3),
+        dict(channels=[   ], a=4),
+        dict(channels=[0  ], a=4),
+        dict(channels=[  1], a=4),
+        dict(channels=[0,1], a=4),
+    ])
+    atoms = mmvox.add_atom_channel_by_expr(atoms, pl.col('a') == 4, 2)
+
+    assert atoms.to_dicts() == [
+        dict(channels=[     ], a=3),
+        dict(channels=[0    ], a=3),
+        dict(channels=[  1  ], a=3),
+        dict(channels=[0,1  ], a=3),
+        dict(channels=[    2], a=4),
+        dict(channels=[0,  2], a=4),
+        dict(channels=[  1,2], a=4),
+        dict(channels=[0,1,2], a=4),
+    ]
 
 
 @pff.parametrize(
