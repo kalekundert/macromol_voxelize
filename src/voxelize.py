@@ -255,7 +255,7 @@ def set_atom_channels_by_element(
     atoms = atoms.with_columns(
             channels=(
                 pl.col('element')
-                .replace(
+                .replace_strict(
                     channel_map,
                     default=channel_map.pop('*', None),
                     return_dtype=pl.List(pl.Int64),
@@ -284,7 +284,7 @@ all atoms must be assigned at least one channel
 
 def add_atom_channel_by_expr(
         atoms: pl.DataFrame,
-        expr: pl.type_aliases.IntoExprColumn,
+        expr: pl._typing.IntoExprColumn,
         channel: int,
 ):
     expr_channel = (
