@@ -10,9 +10,10 @@ from pymol.cgo import (
         VERTEX,
 )
 from itertools import product
+from more_itertools import take
 from pipeline_func import f
 
-from .voxelize import (
+from macromol_voxelize import (
         ImageParams, Grid, image_from_atoms, set_atom_radius_A,
         set_atom_channels_by_element, get_voxel_center_coords,
 )
@@ -40,7 +41,7 @@ def voxelize(
 
     atoms = (
             atoms
-            | f(set_atom_channels_by_element, channels, first_match=True)
+            | f(set_atom_channels_by_element, channels)
             | f(set_atom_radius_A, element_radius_A)
     )
     img_params = ImageParams(
@@ -69,6 +70,46 @@ def voxelize(
 
 pymol.cmd.extend('voxelize', voxelize)
 cmd.auto_arg[0]['voxelize'] = cmd.auto_arg[0]['zoom']
+
+def load_voxels(
+        img_path,
+        resolution_A,
+        channel=None,
+        obj_name='voxels',
+        outline_name='outline',
+):
+    img = np.load(img_path)
+
+    c, w, h, d = img.shape
+    if w != h or h != d:
+        raise ValueError(f"inconsistent image dimensions: {w}, {h}, {d}")
+
+    if channel is not None:
+        img = img[[int(channel)]]
+        colors = [(1, 1, 1)]
+    else:
+        from matplotlib.colors import TABLEAU_COLORS, hex2color
+        colors = []
+        n = img.shape[0]
+
+        for i, k in enumerate(take(n, TABLEAU_COLORS)):
+            print(f"channel {i}: {k[4:]}")
+            colors.append(hex2color(TABLEAU_COLORS[k]))
+
+    render_image(
+            obj_names=dict(
+                voxels=obj_name,
+                outline=outline_name,
+            ),
+            img=img,
+            grid=Grid(
+                length_voxels=d,
+                resolution_A=float(resolution_A),
+            ),
+            channel_colors=colors,
+    )
+
+pymol.cmd.extend('load_voxels', load_voxels)
 
 def render_view(
         *,
@@ -186,7 +227,7 @@ def select_view(name, sele, grid, frame_ix=None):
     cmd.select(name, 'b = 1')
 
 def parse_channels(channels_str):
-    return channels_str.split(',') + ['.*']
+    return [[x] for x in channels_str.split(',') + ['*']]
 
 def parse_element_radius_A(element_radius_A, resolution_A):
     if element_radius_A is None:
@@ -210,7 +251,7 @@ def pick_channel_colors(sele, channels):
     most_common_colors = dict(
             color_channels
             .explode('channels')
-            .groupby('channels', 'color')
+            .group_by('channels', 'color')
             .len()
             .group_by('channels')
             .agg(pl.all().sort_by('len').last())
@@ -241,7 +282,7 @@ def cgo_voxels(img, grid, channel_colors=None):
         from matplotlib.cm import tab10
         channel_colors = tab10.colors[:c]
     if len(channel_colors) != c:
-        raise ValueError(f"Image has {c} channels, but only {len(channel_colors)} were specified")
+        raise ValueError(f"Image has {c} channels, but {len(channel_colors)} colors were specified")
 
     for i, j, k in product(range(w), range(h), range(d)):
         if alpha[i, j, k] == 0:
