@@ -49,7 +49,8 @@ jobs:
         with:
           name: coverage-data-${{ matrix.operating-system }}-${{ matrix.python-version }}
           path: .coverage.*
-          if-no-files-found: ignore
+          include-hidden-files: true
+          if-no-files-found: error
 
   test-llvm-cov:
     name: Run tests (with C++ coverage)
