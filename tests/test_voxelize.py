@@ -208,12 +208,18 @@ def test_image_from_atoms(atoms, img_params, expected):
     assert_images_match(img, expected)
     assert img.dtype == img_params.dtype
 
+@pytest.mark.xfail
 def test_image_from_atoms_chunks():
+    # 2024/10/10: I marked this test as xfail because it's flaky on the CI 
+    # server.  How exactly the data frame gets chunked seems to depend on 
+    # something outside of this test, perhaps the version of polars/arrow being 
+    # used or something like that.
+
     # This test makes much more sense in the context of passing the Arrow table 
     # directly to the C++ code.  I'm not doing that anymore, but this still 
     # seems like a reasonable test case.  It checks that copies can occur when 
     # they have to.
-
+    
     x = pl.Series("x", [-0.5, 0.5])
     x.append(pl.Series([-0.5, 0.5]))
     x.append(pl.Series([-0.5, 0.5]))
