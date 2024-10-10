@@ -30,6 +30,7 @@ def voxelize(
         sele_name='within_img',
         obj_name='voxels',
         outline_name='outline',
+        out_path=None,
 ):
     atoms = mmdf.from_pymol(all_sele, state)
     length_voxels = int(length_voxels)
@@ -66,6 +67,7 @@ def voxelize(
             img_params=img_params,
             channel_colors=pick_channel_colors(sele_name, channels),
             outline=outline,
+            out_path=out_path,
     )
 
 pymol.cmd.extend('voxelize', voxelize)
@@ -122,6 +124,7 @@ def render_view(
         img=True,
         frame_ix=None,
         scale_alpha=False,
+        out_path=None,
         state=-1,
 ):
     if frame_ix is not None:
@@ -133,6 +136,8 @@ def render_view(
 
     if img:
         img = image_from_atoms(atoms_x, img_params)
+        if out_path:
+            np.save(img)
     else:
         img = None
 
