@@ -9,7 +9,7 @@ from pymol.cgo import (
         ALPHA, BEGIN, COLOR, CONE, CYLINDER, END, LINES, NORMAL, TRIANGLE_FAN,
         VERTEX,
 )
-from itertools import product
+from itertools import product, chain, repeat
 from more_itertools import take
 from pipeline_func import f
 
@@ -21,8 +21,8 @@ from macromol_voxelize import (
 def voxelize(
         center_sele=None,
         all_sele='all',
-        length_voxels=21,
-        resolution_A=0.75,
+        length_voxels=35,
+        resolution_A=1,
         channels='C,N,O',
         element_radius_A=None,
         outline=False,
@@ -75,13 +75,16 @@ cmd.auto_arg[0]['voxelize'] = cmd.auto_arg[0]['zoom']
 
 def load_voxels(
         img_path,
-        resolution_A,
+        resolution_A=1,
         channel=None,
         obj_name='voxels',
         outline_name='outline',
+        color_scheme='pymol',
 ):
     img = np.load(img_path)
 
+    if len(img.shape) != 4:
+        raise ValueError(f"expected 4 dimensions [C, W, H, D], got: {img.shape}")
     c, w, h, d = img.shape
     if w != h or h != d:
         raise ValueError(f"inconsistent image dimensions: {w}, {h}, {d}")
@@ -89,7 +92,8 @@ def load_voxels(
     if channel is not None:
         img = img[[int(channel)]]
         colors = [(1, 1, 1)]
-    else:
+
+    elif color_scheme == 'tableau':
         from matplotlib.colors import TABLEAU_COLORS, hex2color
         colors = []
         n = img.shape[0]
@@ -97,6 +101,19 @@ def load_voxels(
         for i, k in enumerate(take(n, TABLEAU_COLORS)):
             print(f"channel {i}: {k[4:]}")
             colors.append(hex2color(TABLEAU_COLORS[k]))
+
+    elif color_scheme == 'pymol':
+        colors = []
+        n = img.shape[0]
+
+        color_names = chain(
+                ['carbon', 'nitrogen', 'oxygen', 'phosphorus', 'sulfur'],
+                repeat('white'),
+        )
+
+        for i, k in enumerate(take(n, color_names)):
+            print(f"channel {i}: {k}")
+            colors.append(cmd.get_color_tuple(k))
 
     render_image(
             obj_names=dict(
@@ -137,7 +154,7 @@ def render_view(
     if img:
         img = image_from_atoms(atoms_x, img_params)
         if out_path:
-            np.save(img)
+            np.save(out_path, img)
     else:
         img = None
 
