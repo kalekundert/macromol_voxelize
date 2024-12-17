@@ -80,6 +80,7 @@ def load_voxels(
         obj_name='voxels',
         outline_name='outline',
         color_scheme='pymol',
+        scale_alpha='no',
 ):
     img = np.load(img_path)
 
@@ -115,6 +116,8 @@ def load_voxels(
             print(f"channel {i}: {k}")
             colors.append(cmd.get_color_tuple(k))
 
+    scale_alpha = {'yes': True, 'no': False}[scale_alpha]
+
     render_image(
             obj_names=dict(
                 voxels=obj_name,
@@ -126,6 +129,7 @@ def load_voxels(
                 resolution_A=float(resolution_A),
             ),
             channel_colors=colors,
+            scale_alpha=scale_alpha,
     )
 
 pymol.cmd.extend('load_voxels', load_voxels)
