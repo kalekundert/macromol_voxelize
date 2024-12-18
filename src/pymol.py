@@ -9,6 +9,7 @@ from pymol.cgo import (
         ALPHA, BEGIN, COLOR, CONE, CYLINDER, END, LINES, NORMAL, TRIANGLE_FAN,
         VERTEX,
 )
+from pathlib import Path
 from itertools import product, chain, repeat
 from more_itertools import take
 from pipeline_func import f
@@ -77,11 +78,12 @@ def load_voxels(
         img_path,
         resolution_A=1,
         channel=None,
-        obj_name='voxels',
+        obj_name=None,
         outline_name='outline',
         color_scheme='pymol',
         scale_alpha='no',
 ):
+    img_path = Path(img_path)
     img = np.load(img_path)
 
     if len(img.shape) != 4:
@@ -120,7 +122,7 @@ def load_voxels(
 
     render_image(
             obj_names=dict(
-                voxels=obj_name,
+                voxels=obj_name or img_path.stem,
                 outline=outline_name,
             ),
             img=img,
