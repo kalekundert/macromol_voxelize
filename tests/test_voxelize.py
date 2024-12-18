@@ -97,9 +97,7 @@ def image_params(params):
             channels=int(params.get('channels', '1')),
             grid=grid(params['grid']),
             dtype=with_np.eval(params.get('dtype', 'np.float32')),
-            process_filtered_atoms=with_mmvox.eval(
-                params.get('process_filtered_atoms', 'lambda df: df'),
-            ),
+            max_radius_A=eval(params.get('max_radius_A', 'None')),
     )
 
 def image(params):
@@ -204,7 +202,7 @@ def test_add_atom_channel_by_expr():
         ),
 )
 def test_image_from_atoms(atoms, img_params, expected):
-    img = mmvox.image_from_atoms(atoms, img_params)
+    img, _ = mmvox.image_from_atoms(atoms, img_params)
     assert_images_match(img, expected)
     assert img.dtype == img_params.dtype
 
@@ -243,7 +241,7 @@ def test_image_from_atoms_chunks():
             channels=1,
             grid=Grid(length_voxels=2, resolution_A=1),
     )
-    img = mmvox.image_from_atoms(atoms, img_params)
+    img, _ = mmvox.image_from_atoms(atoms, img_params)
 
     expected = {
             (0,0,0,0): 1,
@@ -275,17 +273,13 @@ def test_make_empty_image():
         schema=[
             pff.cast(
                 atoms=atoms,
-                max_r=float,
-                grid=grid,
+                img_params=image_params,
                 expected=atoms,
             ),
-            pff.defaults(
-                max_r=None,
-            )
         ],
 )
-def test_discard_atoms_outside_image(atoms, max_r, grid, expected):
-    actual = _mmvox._discard_atoms_outside_image(atoms, grid, max_r)
+def test_discard_atoms_outside_image(atoms, img_params, expected):
+    actual = mmvox.discard_atoms_outside_image(atoms, img_params)
     pl.testing.assert_frame_equal(actual, expected)
 
 @pff.parametrize(

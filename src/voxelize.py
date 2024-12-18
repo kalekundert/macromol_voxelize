@@ -4,7 +4,7 @@ import numpy as np
 from ._voxelize import Grid, _add_atoms_to_image, _get_voxel_center_coords
 from dataclasses import dataclass
 
-from typing import TypeAlias, Callable, Optional
+from typing import TypeAlias, Optional
 from numpy.typing import NDArray
 
 """\
@@ -77,26 +77,6 @@ class ImageParams:
     to store the final result, and in turn the size of the final image.
     """
 
-    process_filtered_atoms: Callable[[pl.DataFrame], pl.DataFrame] = lambda x: x
-    """\
-    Calculate any remaining parameters needed to construct the image, but only 
-    for those atoms that will actually be in the image.
-
-    The main reason to use this function is to more efficiently assign 
-    channels, and sometimes radii, to each atom.  It would be possible to 
-    assign both these properties before calling `image_from_atoms()`, but that 
-    would mean processing the whole *atoms* dataframe.  Most of the time, only 
-    a small fraction of those atoms will end up in the final image, so 
-    processing all of them is a waste of time.  In contrast, this function is 
-    called after an initial filtering step removes irrelevant atoms.
-
-    This function should never modify any values that were used in the 
-    filtering step itself.  Doing so would likely cause the results of the 
-    filtering step to be incorrect.  This always includes the *x*, *y*, and *z* 
-    columns.  It also includes the *radius_A* column if `max_radius_A` isn't 
-    specified.
-    """
-
     max_radius_A: Optional[float] = None
     """\
     The maximum radius to use when filtering atoms that are outside the image, 
@@ -112,7 +92,7 @@ class ImageParams:
 
 Image: TypeAlias = NDArray
 
-def image_from_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> Image:
+def image_from_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> tuple[Image, pl.DataFrame]:
     """\
     Create an voxelized representation of the given atoms.
 
@@ -129,12 +109,10 @@ def image_from_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> Image:
               angstroms.  The `set_atom_radius_A()` function can be used to 
               create this column, if necessary.
 
-            - *channels* (required): A list of integers specifying the channels 
-              that each atom belongs to.  Each atom can belong to any number of 
-              channels, and each channel index must be between 0 and 
-              ``img_params.channels - 1``.  Note that this column doesn't have 
-              to be present in the *atoms* dataframe; it can also be calculated 
-              by `img_params.process_filtered_atoms()`.
+            - *channels* (required): The channels that each atoms belongs to, 
+              expressed as a list of integers.  Each atom can belong to any 
+              number of channels.  Each channel index must be between 0 and 
+              ``img_params.channels - 1``, inclusive.
 
             - *occupancy* (optional): How "present" each atom is.  More 
               specifically, this is a factor that will be used to scale the 
@@ -147,25 +125,49 @@ def image_from_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> Image:
             includes the dimensions of the image.
 
     Returns:
-        A floating point array of dimension $(C, X, Y, Z)$, where $C$ is 
-        the number of channels specified by `img_params.channels` and $X$, $Y$, 
-        and $Z$ are the spatial dimensions specified by 
-        `img_params.grid.length_voxels`.
+        image:
+            A floating point array of dimension $(C, X, Y, Z)$, where $C$ is 
+            the number of channels specified by `img_params.channels` and $X$, $Y$, 
+            and $Z$ are the spatial dimensions specified by 
+            `img_params.grid.length_voxels`.
+
+        atoms:
+            A dataframe containing just the atoms that are present in the 
+            returned image.  This dataframe can be used to calculate answers to 
+            questions such as how many atoms are in the image, is the image 
+            mostly protein or nucleic acid, what amino acid is in the center of 
+            the image, etc.
     """
-    img = _make_empty_image(img_params)
-    grid = img_params.grid
+    atoms = discard_atoms_outside_image(atoms, img_params)
+    img = image_from_all_atoms(atoms, img_params)
 
-    # Without this filter, `_find_voxels_possibly_contacting_sphere()` becomes 
-    # a performance bottleneck.
-    atoms = _discard_atoms_outside_image(atoms, grid, img_params.max_radius_A)
-    atoms = img_params.process_filtered_atoms(atoms)
+    return img, atoms
 
+def image_from_all_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> Image:
+    """\
+    Create an voxelized representation of the given atoms.
+
+    Arguments:
+        atoms: See `image_from_atoms()`
+        img_params: See `image_from_atoms()`
+
+    Returns:
+        image: See `image_from_atoms()`
+
+    This function is the same as `image_from_atoms()`, but without the initial 
+    pruning of atoms outside the image.  This step is generally an important 
+    performance optimization, but can be a waste of time if either (i) there aren't 
+    many atoms that fall outside the image or (ii) the atoms were already 
+    pruned by `discard_atoms_outside_image()` prior to calling this function.
+    """
     if __debug__:
         _check_channels(atoms, img_params.channels)
         _check_max_radius_A(atoms, img_params.max_radius_A)
 
     if 'occupancy' not in atoms:
         atoms = atoms.with_columns(occupancy=1.0)
+
+    img = _make_empty_image(img_params)
 
     # If the input dataframe is in the right format, the casts will be no-ops 
     # and the numpy conversions won't perform any copies.  However, this isn't 
@@ -174,7 +176,7 @@ def image_from_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> Image:
     # unless the dataframe is rechunked afterwards.
     _add_atoms_to_image(
             img,
-            grid,
+            img_params.grid,
             atoms['x'].cast(pl.Float64).to_numpy(),
             atoms['y'].cast(pl.Float64).to_numpy(),
             atoms['z'].cast(pl.Float64).to_numpy(),
@@ -186,6 +188,59 @@ def image_from_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> Image:
 
     return img
         
+def discard_atoms_outside_image(atoms: pl.DataFrame, img_params: ImageParams):
+    """\
+    Return only those atoms that will be present in the image.
+
+    Arguments:
+        atoms:
+            See `image_from_atoms()`, but only the *x*, *y*, and *z* columns 
+            are required.  If the *radius_A* column is specified, it will be 
+            used.  Otherwise, *img_params.max_radius_A* must be specified, and 
+            every atom will be assumed to have that radius.
+
+        img_params:
+            See `image_from_atoms()`.
+
+    Returns:
+        A copy of the atoms dataframe containing only those rows corresponding 
+        to atoms that have some overlap with the image.  No changes are made to 
+        any of the rows that are returned.
+
+    The primary reason to use this function is to save a little bit of time by 
+    only calculating columns such as *channels* and *radius_A* for those the 
+    atoms that need them.  When using `image_from_atoms()`, there's no way to 
+    know which atoms will actually be part of the image.  So if any columns 
+    need to be calculated, they need to be calculated for every atom.  This can 
+    be wasteful for large structures, where only a small fraction of the atoms 
+    participate in the final image.
+
+    This function is typically followed by `image_from_all_atoms()`, not 
+    `image_from_atoms()`, to avoid needlessly repeating this filtering step.  
+    Be careful not to modify the *x*, *y*, *z*, or *radius_A* columns of the 
+    filtered *atoms* dataframe produced by this function before generating the 
+    image.  Doing so could move the affected atoms outside the image, meaning 
+    that the dataframe would no longer be an accurate listing of the atoms 
+    in the image.
+    """
+    grid = img_params.grid
+    max_radius_A = img_params.max_radius_A
+
+    if max_radius_A is None:
+        max_radius_A = atoms['radius_A'].max()
+
+    min_corner = grid.center_A - (grid.length_A / 2 + max_radius_A)
+    max_corner = grid.center_A + (grid.length_A / 2 + max_radius_A)
+
+    return atoms.filter(
+            pl.col('x') > min_corner[0],
+            pl.col('x') < max_corner[0],
+            pl.col('y') > min_corner[1],
+            pl.col('y') < max_corner[1],
+            pl.col('z') > min_corner[2],
+            pl.col('z') < max_corner[2],
+    )
+
 def set_atom_radius_A(atoms: pl.DataFrame, radius_A: float):
     """\
     Assign all atoms the same radius.
@@ -349,22 +404,6 @@ def _check_max_radius_A(atoms, max_radius_A):
 def _make_empty_image(img_params):
     shape = img_params.channels, *img_params.grid.shape
     return np.zeros(shape, dtype=img_params.dtype)
-
-def _discard_atoms_outside_image(atoms, grid, max_radius_A):
-    if max_radius_A is None:
-        max_radius_A = atoms['radius_A'].max()
-
-    min_corner = grid.center_A - (grid.length_A / 2 + max_radius_A)
-    max_corner = grid.center_A + (grid.length_A / 2 + max_radius_A)
-
-    return atoms.filter(
-            pl.col('x') > min_corner[0],
-            pl.col('x') < max_corner[0],
-            pl.col('y') > min_corner[1],
-            pl.col('y') < max_corner[1],
-            pl.col('z') > min_corner[2],
-            pl.col('z') < max_corner[2],
-    )
 
 class ValidationError(Exception):
     pass
