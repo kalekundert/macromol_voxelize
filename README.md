@@ -66,9 +66,9 @@ atoms = pl.DataFrame([
 atoms = mmvox.set_atom_radius_A(atoms, 0.75)
 
 # Add a "channels" column to the dataframe.  This function assigns channels by 
-# matching a series of regular expressions against each atom's element name, 
-# but again you could do this however you want.
-atoms = mmvox.set_atom_channels_by_element(atoms, ['C', 'N', 'O', 'S|SE'])
+# matching each atom's element name to an index in the given list, but again 
+# you could do this however you want.
+atoms = mmvox.set_atom_channels_by_element(atoms, [['C'], ['N'], ['O'], ['S', 'SE']])
 
 # Create the 3D image.  Note that this step is not specific to macromolecules 
 # in any way.  It just expects a data frame with "x", "y", "z", "radius_A", 
@@ -81,10 +81,11 @@ img_params = mmvox.ImageParams(
             center_A=[0, 0, 0],
         ),
 )
-img = mmvox.image_from_atoms(atoms, img_params)
+img, img_atoms = mmvox.image_from_atoms(atoms, img_params)
 ```
 
-Here's a rendering of this image:
+This library also contains tools for rendering these images in PyMOL.  Here's 
+what the above image looks like:
 
 <p align="center">
   <img src="docs/met.png" width="400">
