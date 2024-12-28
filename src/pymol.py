@@ -267,7 +267,7 @@ def pick_channel_colors(sele, channels):
     elem_colors = []
     cmd.iterate(
             sele,
-            'elem_colors.append(dict(element=elem, color=color))',
+            'elem_colors.append(dict(element=elem, color=color, occupancy=q))',
             space=locals(),
     )
 
@@ -280,9 +280,9 @@ def pick_channel_colors(sele, channels):
             color_channels
             .explode('channels')
             .group_by('channels', 'color')
-            .len()
+            .agg(pl.col('occupancy').sum())
             .group_by('channels')
-            .agg(pl.all().sort_by('len').last())
+            .agg(pl.all().sort_by('occupancy').last())
             .select('channels', 'color')
             .iter_rows()
     )
