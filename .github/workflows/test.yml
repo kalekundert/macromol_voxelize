@@ -52,52 +52,11 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
 
-  test-llvm-cov:
-    name: Run tests (with C++ coverage)
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-      - name: Install test dependencies
-        run: |
-          sudo apt install llvm
-          python -m pip install --upgrade pip
-
-          export CC=$(which clang)
-          export CXX=$(which clang++)
-          export CFLAGS='-fprofile-instr-generate -fcoverage-mapping'
-          
-          python -m pip install -e '.[test]'
-      - name: Run test suite
-        run: |
-          LLVM_PROFILE_FILE="mmvox.profraw" python -m pytest
-
-          # https://stackoverflow.com/questions/50613601/getting-llvm-cov-to-talk-to-codecov-io
-          llvm-profdata merge -sparse mmvox.profraw -o mmvox.profdata
-          llvm-cov show \
-            macromol_voxelize/_voxelize.*.so \
-            -instr-profile=mmvox.profdata \
-            macromol_voxelize/_voxelize.cc \
-            | tee coverage-llvm.txt
-
-      - name: Store coverage data
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-data-llvm
-          path: coverage-llvm.txt
-          if-no-files-found: ignore
-
   coverage:
     name: Report coverage
     runs-on: ubuntu-latest
     needs:
       - test
-      - test-llvm-cov
 
     steps:
       - uses: actions/checkout@v4
