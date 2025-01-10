@@ -66,6 +66,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .[test,pymol] coverage[toml]
 
+      - name: Setup tmate session
+        if: ${{ matrix.operating-system == 'ubuntu-latest' }}
+        uses: mxschmitt/action-tmate@v3
+
       - name: Run test suite
         run: |
           python -m coverage run -m pytest
