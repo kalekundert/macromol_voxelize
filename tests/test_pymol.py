@@ -1,6 +1,7 @@
 import parametrize_from_file as pff
 from pathlib import Path
 
+COVERAGE_CONFIG = Path(__file__).parents[1] / 'pyproject.toml'
 REF_IMAGE_DIR = Path(__file__).parent / 'ref_screenshots'
 INPUT_DIR = Path(__file__).parent / 'pymol_inputs'
 
@@ -14,13 +15,19 @@ def run_pymol(commands, img_path):
     pymol = [
             os.environ.get('MMVOX_PYTEST_PYMOL', 'pymol'),
             '-ck',
+            '-d', 'import coverage',
+            '-d', 'coverage.process_startup()',
             '-d', 'import macromol_voxelize.pymol',
             *interleave(repeat('-d'), commands),
             '-g', str(img_path.resolve()),
     ]
+    env = {
+            **os.environ,
+            'COVERAGE_PROCESS_START': COVERAGE_CONFIG,
+    }
 
     try:
-        run(pymol)
+        run(pymol, env=env, check=True)
     except FileNotFoundError:
         skip("PyMOL not found")
 
