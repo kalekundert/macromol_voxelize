@@ -23,7 +23,7 @@ def run_pymol(commands, img_path):
     ]
     env = {
             **os.environ,
-            'COVERAGE_PROCESS_START': COVERAGE_CONFIG,
+            'COVERAGE_PROCESS_START': str(COVERAGE_CONFIG),
     }
 
     try:
