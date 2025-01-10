@@ -29,7 +29,7 @@ dependencies = [
 pymol = [
   'macromol_dataframe',
   'matplotlib',
-  'mixbox',
+  'pymixbox',
   'pipeline_func',
 ]
 test = [

@@ -1,0 +1,32 @@
+test_pymol_screenshot:
+  -
+    id: voxelize
+    commands:
+      - load $IN/met.cif
+      - voxelize
+  -
+    id: voxelize-outline
+    commands:
+      - load $IN/met.cif
+      - voxelize length_voxels=5, outline=1
+  -
+    id: voxelize-radius
+    commands:
+      - load $IN/met.cif
+      - voxelize element_radius_A=2
+  -
+    id: load-voxels
+    commands:
+      - load_voxels $IN/met.npy
+  -
+    id: load-voxels-channel
+    commands:
+      - load_voxels $IN/met.npy, channel=3
+  -
+    id: load-voxels-tableau
+    commands:
+      - load_voxels $IN/met.npy, color_scheme=tableau
+  -
+    id: cgo-axes
+    commands:
+      - cmd.load_cgo(macromol_voxelize.pymol.cgo_axes(), 'axes')
