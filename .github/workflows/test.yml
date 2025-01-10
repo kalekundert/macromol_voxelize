@@ -2,7 +2,11 @@ name: Test
 
 on:
   push:
+    branches:
+    - master
   pull_request:
+    branches:
+    - master
 
 jobs:
 
@@ -49,7 +53,7 @@ jobs:
           git clone https://github.com/rcsb/mmtf-cpp.git
           mv mmtf-cpp/include/mmtf* pymol-open-source/include/
           cd pymol-open-source
-          python -m pip install numpy pyqt5
+          python -m pip install numpy pyqt5 setuptools
           prefix=$HOME/pymol-open-source-build
           python setup.py build install --home=$prefix
           echo "MMVOX_PYTEST_PYMOL=$prefix/bin/pymol" >> $GITHUB_ENV
