@@ -158,7 +158,7 @@ def render_view(
         frame_xi = None
 
     if img:
-        img = image_from_atoms(atoms_x, img_params)
+        img, _ = image_from_atoms(atoms_x, img_params)
         if out_path:
             np.save(out_path, img)
     else:
