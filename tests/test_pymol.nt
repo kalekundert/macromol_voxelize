@@ -1,0 +1,10 @@
+test_pymol_screenshot:
+  -
+    id: voxelize
+    commands:
+      - load $IN/met.cif
+      - voxelize
+  -
+    id: load-voxels
+    commands:
+      - load_voxels $IN/met.npy
