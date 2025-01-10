@@ -9,6 +9,7 @@ def run_pymol(commands, img_path):
     from subprocess import run
     from itertools import repeat
     from more_itertools import interleave
+    from pytest import skip
 
     pymol = [
             os.environ.get('MMVOX_PYTEST_PYMOL', 'pymol'),
@@ -17,7 +18,11 @@ def run_pymol(commands, img_path):
             *interleave(repeat('-d'), commands),
             '-g', str(img_path.resolve()),
     ]
-    run(pymol)
+
+    try:
+        run(pymol)
+    except FileNotFoundError:
+        skip("PyMOL not found")
 
 def compare_images(expected, actual, *, tol):
     from matplotlib.testing.compare import compare_images

@@ -39,6 +39,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install PyMOL
+        if: ${{ matrix.operating-system == 'ubuntu-latest' }}
         run: |
           sudo apt-get install \
             git build-essential python3-dev libglew-dev libpng-dev \
