@@ -80,45 +80,44 @@ def load_voxels(
         channel=None,
         obj_name=None,
         outline_name='outline',
-        color_scheme='pymol',
+        color_scheme='CNOPS',
         scale_alpha='no',
+        batch_index=-1,
 ):
     img_path = Path(img_path)
     img = np.load(img_path)
 
-    if len(img.shape) != 4:
-        raise ValueError(f"expected 4 dimensions [C, W, H, D], got: {img.shape}")
-    c, w, h, d = img.shape
+    if len(img.shape) not in [4, 5]:
+        raise ValueError(f"expected an image of dimension [B,] C, W, H, D; got {len(img.shape)} dimensions")
+
+    w, h, d = img.shape[-3:]
     if w != h or h != d:
         raise ValueError(f"inconsistent image dimensions: {w}, {h}, {d}")
 
     if channel is not None:
-        img = img[[int(channel)]]
+        img = img[..., [int(channel)], :, :, :]
         colors = [(1, 1, 1)]
 
-    elif color_scheme == 'tableau':
-        from matplotlib.colors import TABLEAU_COLORS, hex2color
+    else:
+        c = img.shape[-4]
+
+        if color_scheme == 'CNOPS':
+            color_names_inf = chain(
+                    ['carbon', 'nitrogen', 'oxygen', 'phosphorus', 'sulfur'],
+                    repeat('white'),
+            )
+            color_names = list(take(c, color_names_inf))
+
+        else:
+            color_names = color_scheme.split(':')
+            if len(color_names) != c:
+                raise ValueError(f"expected {c} colors, got {len(color_names)}")
+
         colors = []
-        n = img.shape[0]
 
-        for i, k in enumerate(take(n, TABLEAU_COLORS)):
-            print(f"channel {i}: {k[4:]}")
-            colors.append(hex2color(TABLEAU_COLORS[k]))
-
-    elif color_scheme == 'pymol':
-        colors = []
-        n = img.shape[0]
-
-        color_names = chain(
-                ['carbon', 'nitrogen', 'oxygen', 'phosphorus', 'sulfur'],
-                repeat('white'),
-        )
-
-        for i, k in enumerate(take(n, color_names)):
+        for i, k in enumerate(color_names):
             print(f"channel {i}: {k}")
             colors.append(cmd.get_color_tuple(k))
-
-    scale_alpha = {'yes': True, 'no': False}[scale_alpha]
 
     render_image(
             obj_names=dict(
@@ -131,7 +130,8 @@ def load_voxels(
                 resolution_A=float(resolution_A),
             ),
             channel_colors=colors,
-            scale_alpha=scale_alpha,
+            scale_alpha=parse_bool(scale_alpha),
+            batch_index=int(batch_index),
     )
 
 pymol.cmd.extend('load_voxels', load_voxels)
@@ -148,7 +148,6 @@ def render_view(
         frame_ix=None,
         scale_alpha=False,
         out_path=None,
-        state=-1,
 ):
     if frame_ix is not None:
         atoms_x = mmdf.transform_atom_coords(atoms_i, frame_ix)
@@ -173,7 +172,6 @@ def render_view(
             outline=outline,
             frame_xi=frame_xi,
             scale_alpha=scale_alpha,
-            state=state,
     )
 
 def render_image(
@@ -186,7 +184,7 @@ def render_image(
         outline=False,
         frame_xi=None,
         scale_alpha=False,
-        state=-1,
+        batch_index=-1,
 ):
     view = cmd.get_view()
 
@@ -208,17 +206,30 @@ def render_image(
         # be opaque no matter what.
         cmd.set('transparency_mode', 1)
 
+        if len(img.shape) not in [4, 5]:
+            raise ValueError(f"expected an image of dimension [B,] C, W, H, D; got {len(img.shape)} dimensions")
+
+        if batch_index != -1:
+            if len(img.shape) == 4:
+                raise ValueError("requested batch index {batch_index}, but given image has no batch dimension")
+            img = img[batch_index]
+
+        if len(img.shape) == 4:
+            img = img[np.newaxis, ...]
+
         if scale_alpha:
             img = img / img.max()
 
-        voxels = cgo_voxels(img, grid, channel_colors)
         cmd.delete(obj_names['voxels'])
-        cmd.load_cgo(voxels, obj_names['voxels'])
+
+        for b in range(img.shape[0]):
+            voxels = cgo_voxels(img[b], grid, channel_colors)
+            cmd.load_cgo(voxels, obj_names['voxels'], state=b+1)
 
     if frame_xi is not None:
         for obj in obj_names.values():
             frame_1d = frame_xi.flatten().tolist()
-            cmd.set_object_ttt(obj, frame_1d, state)
+            cmd.set_object_ttt(obj, frame_1d, state=-1)
 
     cmd.set_view(view)
 
@@ -262,6 +273,12 @@ def parse_element_radius_A(element_radius_A, resolution_A):
         return resolution_A / 2
     else:
         return float(element_radius_A)
+
+def parse_bool(x: str) -> bool:
+    return {
+            'yes': True,  'true': True,   'on': True,    '1': True,
+            'no': False,  'false': False, 'off': False,  '0': False,
+    }[x.lower()]
 
 def pick_channel_colors(sele, channels):
     elem_colors = []

@@ -23,9 +23,9 @@ test_pymol_screenshot:
     commands:
       - load_voxels $IN/met.npy, channel=3
   -
-    id: load-voxels-tableau
+    id: load-voxels-color-scheme
     commands:
-      - load_voxels $IN/met.npy, color_scheme=tableau
+      - load_voxels $IN/met.npy, color_scheme=cyan:blue:red:yellow
   -
     id: cgo-axes
     commands:
