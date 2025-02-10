@@ -4,7 +4,8 @@ import numpy as np
 from ._voxelize import Grid, _add_atoms_to_image, _get_voxel_center_coords
 from dataclasses import dataclass
 
-from typing import TypeAlias, Optional
+from typing import Optional, Type, Tuple, List
+from typing_extensions import TypeAlias
 from numpy.typing import NDArray
 
 """\
@@ -59,7 +60,7 @@ class ImageParams:
     The spatial dimensions of the image.
     """
 
-    dtype: type[np.floating] = np.float32
+    dtype: Type[np.floating] = np.float32
     """\
     The data type used to encode each voxel of the image.
 
@@ -92,7 +93,7 @@ class ImageParams:
 
 Image: TypeAlias = NDArray
 
-def image_from_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> tuple[Image, pl.DataFrame]:
+def image_from_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> Tuple[Image, pl.DataFrame]:
     """\
     Create an voxelized representation of the given atoms.
 
@@ -262,7 +263,7 @@ def set_atom_radius_A(atoms: pl.DataFrame, radius_A: float):
 
 def set_atom_channels_by_element(
         atoms: pl.DataFrame,
-        channels: list[list[str]],
+        channels: List[List[str]],
         *,
         drop_missing_atoms: bool = False,
 ) -> pl.DataFrame:

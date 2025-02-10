@@ -26,7 +26,7 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ['3.10', '3.x']
+        python-version: ['3.8', '3.x']
         operating-system:
           - ubuntu-latest
           - macos-latest
@@ -43,7 +43,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install PyMOL
-        if: ${{ matrix.operating-system == 'ubuntu-latest' }}
+        if: ${{ matrix.operating-system == 'ubuntu-latest' && matrix.python-version == '3.x' }}
         run: |
           sudo apt-get install \
             git build-essential python3-dev libglew-dev libpng-dev \
@@ -88,7 +88,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.8'
       - run: |
           python -m pip install --upgrade pip
           python -m pip install coverage[toml]
