@@ -79,6 +79,7 @@ def load_voxels(
         resolution_A=1,
         channel=None,
         obj_name=None,
+        outline=False,
         outline_name='outline',
         color_scheme='CNOPS',
         scale_alpha='no',
@@ -130,6 +131,7 @@ def load_voxels(
                 resolution_A=float(resolution_A),
             ),
             channel_colors=colors,
+            outline=outline,
             scale_alpha=parse_bool(scale_alpha),
             batch_index=int(batch_index),
     )
