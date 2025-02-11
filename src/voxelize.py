@@ -6,7 +6,11 @@ from dataclasses import dataclass
 
 from typing import Optional, Type, Tuple, List
 from typing_extensions import TypeAlias
-from numpy.typing import NDArray
+
+try:
+    from numpy.typing import NDArray
+except ImportError:
+    NDArray = np.ndarray
 
 """\
 Data structures and naming conventions
