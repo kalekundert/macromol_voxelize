@@ -21,6 +21,7 @@ from macromol_voxelize import (
 
 def voxelize(
         center_sele=None,
+        center_A=None,
         all_sele='all',
         length_voxels=35,
         resolution_A=1,
@@ -29,17 +30,21 @@ def voxelize(
         outline=False,
         state=-1,
         sele_name='within_img',
-        obj_name='voxels',
+        img_name='voxels',
         outline_name='outline',
         out_path=None,
 ):
     atoms = mmdf.from_pymol(all_sele, state)
     length_voxels = int(length_voxels)
     resolution_A = float(resolution_A)
-    center_A = np.array(cmd.centerofmass(center_sele or all_sele, state))
     channels = parse_channels(channels)
     element_radius_A = parse_element_radius_A(element_radius_A, resolution_A)
     state = int(state)
+
+    if center_A is not None:
+        center_A = np.array(eval(center_A))
+    else:
+        center_A = np.array(cmd.centerofmass(center_sele or all_sele, state))
 
     atoms = (
             atoms
@@ -61,7 +66,7 @@ def voxelize(
     )
     render_view(
             obj_names=dict(
-                voxels=obj_name,
+                voxels=img_name,
                 outline=outline_name,
             ),
             atoms_i=atoms,
@@ -78,7 +83,7 @@ def load_voxels(
         img_path,
         resolution_A=1,
         channel=None,
-        obj_name=None,
+        img_name=None,
         outline=False,
         outline_name='outline',
         color_scheme='CNOPS',
@@ -122,7 +127,7 @@ def load_voxels(
 
     render_image(
             obj_names=dict(
-                voxels=obj_name or img_path.stem,
+                voxels=img_name or img_path.stem,
                 outline=outline_name,
             ),
             img=img,
@@ -137,6 +142,11 @@ def load_voxels(
     )
 
 pymol.cmd.extend('load_voxels', load_voxels)
+cmd.auto_arg[0]['load_voxels'] = [
+        lambda: cmd.Shortcut([p.name for p in Path.cwd().glob('*.npy')]),
+        'image path (*.npy)',
+        '',
+]
 
 def render_view(
         *,
