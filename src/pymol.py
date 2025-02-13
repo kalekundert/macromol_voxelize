@@ -34,6 +34,60 @@ def voxelize(
         outline_name='outline',
         out_path=None,
 ):
+    """\
+DESCRIPTION
+
+    Create a 3D image of the atoms in the specified selection.
+    
+USAGE
+
+    voxelize [center_sele [, center_A [, all_sele [, length_voxels
+        [, resolution_A [, channels [, element_radius_A [, outline [, state
+        [, sele_name [, img_name [, outline_name [, out_path]]]]]]]]]]]]
+
+ARGUMENTS
+
+    center_sele = string: The atoms to center the image on.  Specifically, the 
+    image will be centered on the center of mass of the given selection.
+
+    center_A = float vector: The center of the image, in Angstroms.  This 
+    option supersedes the `center_sele` option, if both are given.
+
+    all_sele = string: The atoms to include in the image. {default: 'all'}
+
+    length_voxels = int: The length of each side of the image, in voxels.  Note 
+    that the image will always be a cube. {default: 35}
+
+    resolution_A = float: The size of each voxel, in Angstroms. {default: 1}
+
+    channels = string list: A comma-separated list of element names.  Each 
+    entry in this list will correspond to a channel in the image. {default: 
+    'C,N,O'}
+
+    element_radius_A = float: The radius of each atom, in Angstroms.
+
+    outline = bool: Whether to render an outline of the image, "yes" or "no". 
+    {default: no}
+
+    state = int: Which state to render. {default: -1}
+
+    sele_name = string: The name to use when creating a selection of all the 
+    atoms that are actually contained within the image. {default: 'within_img'}
+
+    img_name = string: The name to use for the image object that will be 
+    created by this command {default: 'voxels'}
+
+    outline_name = string: The name to use for the outline object that will be 
+    created by this command, if the `outline` option is enabled. {default: outline}
+
+    out_path = string: The path to save the image to.  If not given, the image 
+    will not be saved.
+
+EXAMPLES
+
+    voxelize center_A=[0, 0, 0], length_voxels=35, resolution_A=1
+    
+"""
     atoms = mmdf.from_pymol(all_sele, state)
     length_voxels = int(length_voxels)
     resolution_A = float(resolution_A)
@@ -90,6 +144,52 @@ def load_voxels(
         scale_alpha='no',
         batch_index=-1,
 ):
+    """\
+DESCRIPTION
+
+    Render the image contained in the given file.
+    
+USAGE
+
+    load_voxels img_path [, resolution_A [, channel [, img_name [, outline
+        [, outline_name [, color_scheme [, scale_alpha [, batch_index]]]]]]]
+
+ARGUMENTS
+
+    img_path = string: The path to the image file.  To create an image file, 
+    call `numpy.save(path, image)` on the image made by `image_from_atoms()`.
+
+    resolution_A = float: The size of each voxel, in Angstroms. {default: 1}
+
+    channel = int: The channel to render.  By default, all channels are 
+    rendered.
+
+    img_name = string: The name to use for the image object that will be 
+    created by this command.  The default is the "stem" of the image path.
+
+    outline = bool: Whether to render an outline of the image, "yes" or "no". 
+    {default: no}
+
+    outline_name = string: The name to use for the outline object that will be 
+    created by this command, if the `outline` option is enabled. {default: outline}
+
+    color_scheme = string: The colors to use for each channel.  The default is 
+    'CNOPS', which uses the carbon color for the first channel, nitrogen color 
+    for the second channel, etc.  If there are more than 5 channels, the 
+    remaining channels will all be white.  You can also provide a colon- 
+    separated list of pymol colors.
+
+    scale_alpha = bool: If true, scale the image so that the maximum voxel has 
+    a value of 1.
+
+    batch_index = int: Which image to render (indexing from 0), if the given 
+    image path contains multiple images.
+
+EXAMPLES
+
+    load_voxels path/to/image.npy
+
+"""
     img_path = Path(img_path)
     img = np.load(img_path)
 
