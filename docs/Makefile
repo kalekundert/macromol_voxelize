@@ -53,6 +53,9 @@ help:
 
 clean:
 	rm -rf $(BUILDDIR)/*
+	mv api/macromol_voxelize.Image.rst /tmp
+	rm -rf api/*
+	mv /tmp/macromol_voxelize.Image.rst api
 
 dirhtml:
 	$(SPHINXBUILD) -b dirhtml $(ALLSPHINXOPTS) $(BUILDDIR)/dirhtml

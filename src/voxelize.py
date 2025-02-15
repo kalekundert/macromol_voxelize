@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import polars as pl
 import numpy as np
 
@@ -12,32 +14,6 @@ try:
 except ImportError:
     NDArray = np.ndarray
 
-"""\
-Data structures and naming conventions
-======================================
-This list only includes data types that don't have their own classes.
-
-`img`:
-  A `np.ndarray` that contains the voxelized scene.
-
-`atoms`:
-  A `pandas.DataFrame` with the following columns: x, y, z, element.  This is 
-  the way atoms are expected to be represented externally.  Internally, the 
-  Atom data class is used to represent individual atoms.
-
-`voxel`:
-  A 3D `numpy.ndarray` containing the index for one of the cells in the image.  
-  Generally, these indices are constrained to actually fall within the image in 
-  question (i.e. no indices greater than the size of the image or less than 0).  
-  Note that a `grid` object is needed to determine the physical location of the 
-  voxel.  When multiple voxels are involved, the array has dimensions of (N,3).
-
-`coords`:
-  A 3D `numpy.ndarray` containing the location of the center of a voxel in 
-  real-world coordinates, in units of Angstroms.  When multiple coordinates 
-  that involved, the array has dimensions of (N,3).
-"""
-
 @dataclass
 class ImageParams:
     """\
@@ -47,53 +23,64 @@ class ImageParams:
     The most important parameters are `channels` and `grid`.  Together, these 
     specify the dimensions of the image.  The remaining parameters have 
     reasonable defaults.
+
+    .. attribute:: channels
+        :type: int
+
+        The number of channels in the image.
+
+        Note that this must be consistent with the *channels* column of the 
+        *atoms* data frame passed to `image_from_atoms()`.  An error will be 
+        raised if any atoms have channel indices that exceed the actual number 
+        of channels, or are negative.
+
+    .. attribute:: grid
+        :type: Grid
+        
+        The spatial dimensions of the image.
+
+    .. attribute:: dtype
+        :type: Type[numpy.floating]
+        :value: numpy.float32
+
+        The data type used to encode each voxel of the image.
+
+        The following data types are supported:
+
+        - `numpy.float32`, a.k.a. `numpy.single`
+        - `numpy.float64`, a.k.a. `numpy.double`
+
+        Note that 64-bit (i.e. double-precision) floating point numbers are 
+        always used for the intermediate calculations needed to fill in each 
+        voxel.  According to the overlap_ library, which implements most of 
+        these calculations, "reducing the numerical precision of the scalar 
+        floating point type will have a significant impact on the precision and 
+        stability of the calculations".  Therefore, this setting only affects 
+        the precision used to store the final result, and in turn the size of 
+        the final image.
+
+    .. attribute:: max_radius_A
+        :type: Optional[float]
+        :value: None
+
+        The maximum radius to use when filtering atoms that are outside the 
+        image, in units of angstroms.
+
+        If not specified, the maximum radius will be calculated from the 
+        *radius_A* column of the *atoms* dataframe passed to 
+        `image_from_atoms()`.  The main reason to specify this parameter is to 
+        allow *radius_A* to be calculated after the initial filtering step, 
+        which can be more efficient.  Note that an error will be raised if any 
+        atoms in the image have radii larger than this maximum (and if 
+        ``__debug__ == True``).
+
+    .. _overlap: https://github.com/severinstrobl/overlap
     """
 
     channels: int
-    """\
-    The number of channels in the image.
-
-    Note that this must be consistent with the *channels* column of the *atoms* 
-    data frame passed to `image_from_atoms()`.  An error will be raised if any 
-    atoms have channel indices that exceed the actual number of channels, or 
-    are negative.
-    """
-
     grid: Grid
-    """\
-    The spatial dimensions of the image.
-    """
-
     dtype: Type[np.floating] = np.float32
-    """\
-    The data type used to encode each voxel of the image.
-
-    The following data types are supported:
-
-    - `np.float32`, a.k.a. `np.single`
-    - `np.float64`, a.k.a. `np.double`
-
-    Note that 64-bit (i.e. double-precision) floating point numbers are always 
-    used for the intermediate calculations needed to fill in each voxel.  
-    According to the overlap_ library, which implements most of these 
-    calculations, "reducing the numerical precision of the scalar floating 
-    point type will have a significant impact on the precision and stability of 
-    the calculations".  Therefore, this setting only affects the precision used 
-    to store the final result, and in turn the size of the final image.
-    """
-
     max_radius_A: Optional[float] = None
-    """\
-    The maximum radius to use when filtering atoms that are outside the image, 
-    in units of angstroms.
-
-    If not specified, the maximum radius will be calculated from the *radius_A* 
-    column of the *atoms* dataframe passed to `image_from_atoms()`.  The main 
-    reason to specify this parameter is to allow *radius_A* to be calculated 
-    after the initial filtering step, which can be more efficient.  Note that 
-    an error will be raised if any atoms in the image have radii larger than 
-    this maximum (and if `__debug__ == True`).
-    """
 
 Image: TypeAlias = NDArray
 
@@ -130,13 +117,15 @@ def image_from_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> Tuple[Imag
             includes the dimensions of the image.
 
     Returns:
-        image:
-            A floating point array of dimension $(C, X, Y, Z)$, where $C$ is 
-            the number of channels specified by `img_params.channels` and $X$, $Y$, 
-            and $Z$ are the spatial dimensions specified by 
-            `img_params.grid.length_voxels`.
+        tuple:
 
-        atoms:
+        - image:
+            A floating point array of dimension $(C, X, Y, Z)$, where $C$ is 
+            the number of channels specified by ``img_params.channels`` and $X$, $Y$, 
+            and $Z$ are the spatial dimensions specified by 
+            ``img_params.grid.length_voxels``.
+
+        - atoms:
             A dataframe containing just the atoms that are present in the 
             returned image.  This dataframe can be used to calculate answers to 
             questions such as how many atoms are in the image, is the image 
@@ -153,11 +142,11 @@ def image_from_all_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> Image:
     Create an voxelized representation of the given atoms.
 
     Arguments:
-        atoms: See `image_from_atoms()`
-        img_params: See `image_from_atoms()`
+        atoms: See `image_from_atoms()`.
+        img_params: See `image_from_atoms()`.
 
     Returns:
-        image: See `image_from_atoms()`
+        See `image_from_atoms()`.
 
     This function is the same as `image_from_atoms()`, but without the initial 
     pruning of atoms outside the image.  This step is generally an important 
@@ -277,7 +266,7 @@ def set_atom_channels_by_element(
     Arguments:
         atoms:
             A dataframe representing the atoms to voxelize.  This function 
-            requires a column named "element", which must contain element names 
+            requires a column named *element*, which must contain element names 
             as strings.
 
         channels:
@@ -347,6 +336,25 @@ def add_atom_channel_by_expr(
         expr: pl._typing.IntoExprColumn,
         channel: int,
 ):
+    """\
+    Add every atom for which the expression is true to the given channel.
+
+    Arguments:
+        atoms:
+            A dataframe representing the atoms to voxelize.  The dataframe must 
+            already have a column named *channels*, in the format expected by 
+            `image_from_atoms()`.
+
+        expr:
+            A boolean expression that will be evaluated for each atom.  If the 
+            expression is true, the atom will be added to the given channel.
+
+        channel:
+            The channel to add the atoms to.
+
+    Returns:
+        A copy of the input dataframe, with the *channels* column modified.
+    """
     expr_channel = (
             pl.when(expr)
             .then([channel])
@@ -481,4 +489,7 @@ def _make_empty_image(img_params):
     return np.zeros(shape, dtype=img_params.dtype)
 
 class ValidationError(Exception):
+    """
+    Raised when errors in the input data are detected.
+    """
     pass

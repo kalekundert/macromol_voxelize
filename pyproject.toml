@@ -38,10 +38,11 @@ test = [
   'parametrize_from_file',
   'pytest',
 ]
-doc = [
+docs = [
   'sphinx',
   'sphinx_rtd_theme',
-  'autoclasstoc',
+  'sphinx_math_dollar',
+  'myst_parser',
 ]
 
 [project.urls]
@@ -79,7 +80,7 @@ exclude = ["src/vendored/*"]
 "__init__.py" = ["F401"]
 
 [tool.pytest.ini_options]
-addopts = "--ignore src --doctest-modules --doctest-glob='*.rst'"
+addopts = "--ignore src --doctest-modules --doctest-glob='*.rst' --ignore=docs/_inv"
 doctest_optionflags = 'NORMALIZE_WHITESPACE'
 
 [tool.coverage.run]

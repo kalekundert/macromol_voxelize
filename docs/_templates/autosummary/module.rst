@@ -1,4 +1,4 @@
-{{ fullname | escape | underline }}
+{{ objname | escape | underline }}
 
 .. For some reason, the default template (as of sphinx 3.1.1) doesn't include 
    the :toctree: setting for the autosummary directives.  If this is ever 

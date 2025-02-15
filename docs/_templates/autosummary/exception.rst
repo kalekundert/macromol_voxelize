@@ -2,5 +2,6 @@
 
 .. currentmodule:: {{ module }}
 
-.. autoclass:: {{ objname }}
+.. autoexception:: {{ objname }}
    :members:
+

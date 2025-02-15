@@ -461,7 +461,34 @@ PYBIND11_MODULE(_voxelize, m) {
 		.def_readonly("length_A", &Grid::length_A)
 		.def_readonly("resolution_A", &Grid::resolution_A)
 		.def_readonly("center_A", &Grid::center_A)
-		.def_property_readonly("shape", &Grid::get_shape);
+		.def_property_readonly("shape", &Grid::get_shape)
+		.doc() = R"DOCSTRING(
+The spatial dimensions of an image.
+
+Note that both the image and its component voxels are assumed to be 3D cubes.  
+That is, all of their sides have the same length.  Grid objects are immutable.
+
+.. attribute:: length_voxels
+	:type: int
+
+	The number of voxels in each dimension of the image.
+
+.. attribute:: length_A
+	:type: int
+
+	The size of the image in each dimension, in angstroms.
+
+.. attribute:: resolution_A
+	:type: float
+
+	The size of each voxel, in angstroms.
+
+.. attribute:: center_A
+	:type: numpy.ndarray
+
+	The coordinates of the center of the image, in angstroms.
+
+)DOCSTRING";
 
 	m.def(
 			"_add_atoms_to_image",
