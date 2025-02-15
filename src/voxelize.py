@@ -1,7 +1,7 @@
 import polars as pl
 import numpy as np
 
-from ._voxelize import Grid, _add_atoms_to_image, _get_voxel_center_coords
+from ._voxelize import Grid, _add_atoms_to_image, _get_voxel_center_coords, _find_voxels_containing_coords
 from dataclasses import dataclass
 
 from typing import Optional, Type, Tuple, List
@@ -89,10 +89,10 @@ class ImageParams:
 
     If not specified, the maximum radius will be calculated from the *radius_A* 
     column of the *atoms* dataframe passed to `image_from_atoms()`.  The main 
-    reason to specify this parameter is to allow *radius_A* to be calculated by 
-    `process_filtered_atoms()`, which can be more efficient.  Note that an error 
-    will be raised if any atoms in the image have radii larger than this 
-    maximum.
+    reason to specify this parameter is to allow *radius_A* to be calculated 
+    after the initial filtering step, which can be more efficient.  Note that 
+    an error will be raised if any atoms in the image have radii larger than 
+    this maximum (and if `__debug__ == True`).
     """
 
 Image: TypeAlias = NDArray
@@ -393,6 +393,76 @@ def get_voxel_center_coords(grid, voxels):
 
     coords_A = _get_voxel_center_coords(grid, voxels.T).T
     return coords_A.reshape(voxels.shape)
+
+def find_occupied_voxels(atoms: pl.DataFrame, grid: Grid):
+    """
+    Return a multi-dimensional slice containing only those voxels that could be 
+    occupied by an atom.
+
+    Arguments:
+        atoms: See `image_from_atoms()`.
+        grid: An object specifying the size and location of each voxel.
+
+    Returns:
+        A tuple of slice objects.  This tuple can be directly used to index 
+        into a numpy array.
+
+    This function can be useful for comparing a small part of a structure, e.g. 
+    a single residue, to a larger image.  The returned slices can quickly get 
+    rid of most of the uninteresting voxels, allowing any calculations 
+    involving the remaining voxels to complete much faster.
+    """
+    probes = (
+            atoms
+            .select(
+                probes=pl.concat_list([
+                    pl.struct(
+                        x=pl.col('x') - pl.col('radius_A'),
+                        y=pl.col('y'),
+                        z=pl.col('z'),
+                    ),
+                    pl.struct(
+                        x=pl.col('x') + pl.col('radius_A'),
+                        y=pl.col('y'),
+                        z=pl.col('z'),
+                    ),
+                    pl.struct(
+                        x=pl.col('x'),
+                        y=pl.col('y') - pl.col('radius_A'),
+                        z=pl.col('z'),
+                    ),
+                    pl.struct(
+                        x=pl.col('x'),
+                        y=pl.col('y') + pl.col('radius_A'),
+                        z=pl.col('z'),
+                    ),
+                    pl.struct(
+                        x=pl.col('x'),
+                        y=pl.col('y'),
+                        z=pl.col('z') - pl.col('radius_A'),
+                    ),
+                    pl.struct(
+                        x=pl.col('x'),
+                        y=pl.col('y'),
+                        z=pl.col('z') + pl.col('radius_A'),
+                    ),
+                ])
+            )
+            .explode('probes')
+            .unnest('probes')
+            .to_numpy()
+    )
+
+    # See the comment in `get_voxel_center_coords()` for an explanation of why 
+    # we need to transpose twice here.
+    voxels = _find_voxels_containing_coords(grid, probes.T).T
+
+    def get_slice(i):
+        start = max(voxels[:, i].min().item(), 0)
+        end = min(voxels[:, i].max().item() + 1, grid.length_voxels)
+        return slice(start, end)
+
+    return ..., get_slice(0), get_slice(1), get_slice(2)
 
 
 def _check_channels(atoms, num_channels):

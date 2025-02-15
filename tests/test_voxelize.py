@@ -418,6 +418,25 @@ def test_get_voxel_center_coords(grid, voxels, coords):
     actual = mmvox.get_voxel_center_coords(grid, voxels)
     assert actual == approx(coords)
 
+@pff.parametrize(
+        schema=pff.cast(
+            atoms=atoms,
+            img_params=image_params,
+            expected=with_py.eval,
+        ),
+)
+def test_find_occupied_voxels(atoms, img_params, expected):
+    ijk = mmvox.find_occupied_voxels(atoms, img_params.grid)
+    assert ijk == tuple(expected)
+
+    # Check that all voxels outside the occupied region are zero.  The best way 
+    # I could think to do this is to set the occupied region to zero, then 
+    # check that the whole image is zero.  Note that some test cases have atoms 
+    # that are outside the image, so we can't really conclude anything about 
+    # the values in the occupied region itself.
+    img = mmvox.image_from_all_atoms(atoms, img_params)
+    img[ijk] = 0
+    assert np.sum(img) == 0
 
 def test_sphere_attrs():
     s = Sphere(
