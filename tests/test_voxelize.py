@@ -98,7 +98,16 @@ def image_params(params):
             grid=grid(params['grid']),
             dtype=with_np.eval(params.get('dtype', 'np.float32')),
             max_radius_A=eval(params.get('max_radius_A', 'None')),
+            fill_algorithm=fill_algorithm(params.get('fill_algorithm', 'FractionAtom')),
     )
+
+def fill_algorithm(params):
+    fill_algorithms = {
+            'OverlapA3': mmvox.FillAlgorithm.OverlapA3,
+            'FractionAtom': mmvox.FillAlgorithm.FractionAtom,
+            'FractionVoxel': mmvox.FillAlgorithm.FractionVoxel,
+    }
+    return fill_algorithms[params]
 
 def image(params):
     return {
@@ -325,18 +334,20 @@ def test_add_atoms_to_image_err_no_copy():
                 atoms['channels'].list.explode().cast(pl.Int32).to_numpy(),
                 atoms['channels'].list.len().to_numpy(),
                 atoms['occupancy'].to_numpy(),
+                _mmvox_cpp.FillAlgorithm.FractionAtom,
         )
 
 @pff.parametrize(
-        schema=pff.cast(grid=grid, atom=atom, expected=image)
+        schema=pff.cast(img_params=image_params, atom=atom, expected=image)
 )
-def test_add_atom_to_image(grid, atom, expected):
-    img_params = mmvox.ImageParams(
-            channels=max(atom.channels) + 1,
-            grid=grid,
-    )
+def test_add_atom_to_image(img_params, atom, expected):
     img = _mmvox._make_empty_image(img_params)
-    _mmvox_cpp._add_atom_to_image(img, grid, atom)
+    _mmvox_cpp._add_atom_to_image(
+            img,
+            img_params.grid,
+            atom,
+            img_params.fill_algorithm,
+    )
     assert_images_match(img, expected)
 
 def test_add_atom_to_image_err_no_copy():

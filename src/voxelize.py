@@ -3,7 +3,10 @@ from __future__ import annotations
 import polars as pl
 import numpy as np
 
-from ._voxelize import Grid, _add_atoms_to_image, _get_voxel_center_coords, _find_voxels_containing_coords
+from ._voxelize import (
+        Grid, FillAlgorithm, _add_atoms_to_image, _get_voxel_center_coords,
+        _find_voxels_containing_coords,
+)
 from dataclasses import dataclass
 
 from typing import Optional, Type, Tuple, List
@@ -74,6 +77,25 @@ class ImageParams:
         atoms in the image have radii larger than this maximum (and if 
         ``__debug__ == True``).
 
+    .. attribute:: fill_algorithm
+        :type: FillAlgorithm
+        :value: FillAlgorithm.FractionAtom
+
+        The algorithm used to calculate a value for each voxel in the image.  
+        The following values are supported:
+
+        - ``FillAlgorithm.OverlapA3``: The volume of overlap between the voxel 
+          and any atoms, in units of Å³.
+
+        - ``FillAlgorithm.FractionAtom``: The number (usually fractional) of 
+          atoms contained in the voxel.  A nice property of this algorithm is 
+          that the sum of all the voxels in the image will match the number of 
+          atoms used to make it.
+
+        - ``FillAlgorithm.FractionVoxel``: The fraction of the voxel that is 
+          occupied by atoms.  This is calculated separately for each atom, 
+          then summed, so the result can be greater than 1.
+
     .. _overlap: https://github.com/severinstrobl/overlap
     """
 
@@ -81,6 +103,7 @@ class ImageParams:
     grid: Grid
     dtype: Type[np.floating] = np.float32
     max_radius_A: Optional[float] = None
+    fill_algorithm: FillAlgorithm = FillAlgorithm.FractionAtom
 
 Image: TypeAlias = NDArray
 
@@ -178,6 +201,7 @@ def image_from_all_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> Image:
             atoms['channels'].list.explode().cast(pl.Int64).to_numpy(),
             atoms['channels'].list.len().to_numpy(),  # no need for cast; len() always returns pl.Int32
             atoms['occupancy'].cast(pl.Float64).to_numpy(),
+            img_params.fill_algorithm,
     )
 
     return img

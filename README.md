@@ -90,3 +90,7 @@ what the above image looks like:
 <p align="center">
   <img src="docs/met.png" width="400">
 </p>
+
+Refer to the [online 
+documentation](https://macromol-voxelize.readthedocs.io/en/latest) for more 
+information.

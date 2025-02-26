@@ -664,7 +664,8 @@ test_find_voxels_possibly_contacting_sphere:
 test_add_atom_to_image:
   -
     id: overlap-1
-    grid: 3
+    img_params:
+      grid: 3
     atom:
       center_A: 0 0 0
       radius_A: 0.5
@@ -673,7 +674,8 @@ test_add_atom_to_image:
       0 1 1 1: 1
   -
     id: overlap-2
-    grid: 3
+    img_params:
+      grid: 3
     atom:
       center_A: 0.5 0 0
       radius_A: 0.5
@@ -683,7 +685,8 @@ test_add_atom_to_image:
       0 2 1 1: 1/2
   -
     id: overlap-4
-    grid: 3
+    img_params:
+      grid: 3
     atom:
       center_A: 0.5 0.5 0
       radius_A: 0.5
@@ -695,7 +698,8 @@ test_add_atom_to_image:
       0 2 2 1: 1/4
   -
     id: overlap-8
-    grid: 3
+    img_params:
+      grid: 3
     atom:
       center_A: 0.5 0.5 0.5
       radius_A: 0.5
@@ -710,8 +714,10 @@ test_add_atom_to_image:
       0 1 2 2: 1/8
       0 2 2 2: 1/8
   -
-    id: channel
-    grid: 3
+    id: channel-1-2
+    img_params:
+      grid: 3
+      channels: 2
     atom:
       center_A: 0 0 0
       radius_A: 0.5
@@ -719,8 +725,21 @@ test_add_atom_to_image:
     expected:
       1 1 1 1: 1
   -
+    id: channel-2-3
+    img_params:
+      grid: 3
+      channels: 3
+    atom:
+      center_A: 0 0 0
+      radius_A: 0.5
+      channels: 0 2
+    expected:
+      0 1 1 1: 1
+      2 1 1 1: 1
+  -
     id: occupancy
-    grid: 3
+    img_params:
+      grid: 3
     atom:
       center_A: 0 0 0
       radius_A: 0.5
@@ -728,6 +747,45 @@ test_add_atom_to_image:
       occupancy: 0.5
     expected:
       0 1 1 1: 0.5
+  -
+    id: fill-overlap-A3
+    img_params:
+      grid:
+        length_voxels: 3
+        resolution_A: 2
+      fill_algorithm: OverlapA3
+    atom:
+      center_A: 0 0 0
+      radius_A: 1
+      channels: 0
+    expected:
+      0 1 1 1: 4/3 * pi
+  -
+    id: fill-fraction-atom
+    img_params:
+      grid:
+        length_voxels: 3
+        resolution_A: 2
+      fill_algorithm: FractionAtom
+    atom:
+      center_A: 0 0 0
+      radius_A: 1
+      channels: 0
+    expected:
+      0 1 1 1: 1
+  -
+    id: fill-fraction-voxel
+    img_params:
+      grid:
+        length_voxels: 3
+        resolution_A: 2
+      fill_algorithm: FractionVoxel
+    atom:
+      center_A: 0 0 0
+      radius_A: 1
+      channels: 0
+    expected:
+      0 1 1 1: 4/3 * pi / 2**3
 
 test_image_from_atoms:
   -

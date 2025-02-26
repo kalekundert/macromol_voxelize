@@ -2,19 +2,6 @@
 API Reference
 *************
 
-..
-   When sphinx 8.2 comes out, add `:no-index-entry:` to the `.. autoclass` and 
-   `..  autofunction`` directives in the autosummary templates.
-
-.. rubric:: Data structures
-
-.. autosummary::
-   :toctree: api
-
-   macromol_voxelize.ImageParams
-   macromol_voxelize.Grid
-   macromol_voxelize.Image
-
 .. rubric:: Functions
 
 .. autosummary::
@@ -28,6 +15,16 @@ API Reference
    macromol_voxelize.add_atom_channel_by_expr
    macromol_voxelize.get_voxel_center_coords
    macromol_voxelize.find_occupied_voxels
+
+.. rubric:: Data structures
+
+.. autosummary::
+   :toctree: api
+
+   macromol_voxelize.Image
+   macromol_voxelize.ImageParams
+   macromol_voxelize.Grid
+   macromol_voxelize.FillAlgorithm
 
 .. rubric:: Exceptions
 

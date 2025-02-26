@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 #include <tuple>
+#include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <sstream>
@@ -63,6 +64,7 @@ struct Grid {
 	):
 		length_voxels(length_voxels),
 		resolution_A(resolution_A),
+		voxel_volume_A3(pow(resolution_A, 3)),
 		length_A(length_voxels * resolution_A),
 		center_A(center_A) {}
 
@@ -72,8 +74,15 @@ struct Grid {
 
 	int const length_voxels;
 	scalar_t const resolution_A;
+	scalar_t const voxel_volume_A3;
 	scalar_t const length_A;
 	vector_t const center_A;
+};
+
+enum class FillAlgorithm {
+	OverlapA3,
+	FractionAtom,
+	FractionVoxel,
 };
 
 
@@ -247,7 +256,8 @@ void
 _add_atom_to_image(
 		py::array_t<T> img,
 		Grid const & grid,
-		Atom const & atom) {
+		Atom const & atom,
+		FillAlgorithm const fill_algorithm) {
 
 	auto img_accessor = img.template mutable_unchecked<4>();
 
@@ -261,7 +271,22 @@ _add_atom_to_image(
 		Hexahedron cube = _get_voxel_cube(grid, voxel);
 		scalar_t overlap_A3 = overlap(atom.sphere, cube);
 		total_overlap_A3 += overlap_A3;
-		fill = atom.occupancy * overlap_A3 / atom.sphere.volume;
+
+		switch (fill_algorithm) {
+			case FillAlgorithm::OverlapA3:
+				fill = overlap_A3;
+				break;
+			case FillAlgorithm::FractionAtom:
+				fill = overlap_A3 / atom.sphere.volume;
+				break;
+			case FillAlgorithm::FractionVoxel:
+				fill = overlap_A3 / grid.voxel_volume_A3;
+				break;
+			default:
+				throw std::runtime_error("unknown fill algorithm");
+		}
+
+		fill *= atom.occupancy;
 
 		for (auto const channel: atom.channels) {
 			img_accessor(channel, voxel(0), voxel(1), voxel(2)) += fill;
@@ -305,7 +330,8 @@ _add_atoms_to_image(
 		py::array_t<scalar_t> radius_A,
 		py::array_t<int64_t, py::array::f_style | py::array::forcecast> channels_flat,
 		py::array_t<uint32_t> channel_lengths,
-		py::array_t<scalar_t> occupancy) {
+		py::array_t<scalar_t> occupancy,
+		FillAlgorithm const fill_algorithm) {
 
 	auto x_getter = x.template unchecked<1>();
 	auto y_getter = y.template unchecked<1>();
@@ -341,7 +367,7 @@ _add_atoms_to_image(
 				channels_i,
 				occupancy_getter(i)
 		);
-		_add_atom_to_image(img, grid, atom);
+		_add_atom_to_image(img, grid, atom, fill_algorithm);
 	}
 }
 
@@ -490,6 +516,11 @@ That is, all of their sides have the same length.  Grid objects are immutable.
 
 )DOCSTRING";
 
+	py::enum_<FillAlgorithm>(m, "FillAlgorithm", "The algorithm used to fill in each voxel of the image.")
+		.value("OverlapA3", FillAlgorithm::OverlapA3)
+		.value("FractionAtom", FillAlgorithm::FractionAtom)
+		.value("FractionVoxel", FillAlgorithm::FractionVoxel);
+
 	m.def(
 			"_add_atoms_to_image",
 			&_add_atoms_to_image<float>,
@@ -501,7 +532,8 @@ That is, all of their sides have the same length.  Grid objects are immutable.
 			py::arg("radius_A").noconvert(),
 			py::arg("channels_flat").noconvert(),
 			py::arg("channel_lengths").noconvert(),
-			py::arg("occupancies").noconvert());
+			py::arg("occupancies").noconvert(),
+			py::arg("fill_algorithm"));
 
 	m.def(
 			"_add_atoms_to_image",
@@ -514,21 +546,24 @@ That is, all of their sides have the same length.  Grid objects are immutable.
 			py::arg("radius_A").noconvert(),
 			py::arg("channels_flat").noconvert(),
 			py::arg("channel_lengths").noconvert(),
-			py::arg("occupancies").noconvert());
+			py::arg("occupancies").noconvert(),
+			py::arg("fill_algorithm"));
 
 	m.def(
 			"_add_atom_to_image",
 			&_add_atom_to_image<float>,
 			py::arg("img").noconvert(),
 			py::arg("grid"),
-			py::arg("atom")); 
+			py::arg("atom"),
+			py::arg("fill_algorithm"));
 
 	m.def(
 			"_add_atom_to_image",
 			&_add_atom_to_image<double>,
 			py::arg("img").noconvert(),
 			py::arg("grid"),
-			py::arg("atom")); 
+			py::arg("atom"),
+			py::arg("fill_algorithm")); 
 
 	m.def(
 			"_find_voxels_possibly_contacting_sphere",
