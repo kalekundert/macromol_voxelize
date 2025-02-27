@@ -3,7 +3,7 @@
 // - Start by installing normally, but without deleting all the intermediate 
 //   files.  This step will be as slow as a normal install:
 //
-// 	   $ pip install --no-clean .
+//     $ pip install --no-clean .
 //
 // - After one `pip install` fails, you can copy the compiler command from the 
 //   error message.  This doesn't actually update the python installation, 
@@ -83,6 +83,11 @@ enum class FillAlgorithm {
 	OverlapA3,
 	FractionAtom,
 	FractionVoxel,
+};
+
+enum class AggAlgorithm {
+	Sum,
+	Max,
 };
 
 
@@ -257,7 +262,8 @@ _add_atom_to_image(
 		py::array_t<T> img,
 		Grid const & grid,
 		Atom const & atom,
-		FillAlgorithm const fill_algorithm) {
+		FillAlgorithm const fill_algorithm,
+		AggAlgorithm const agg_algorithm) {
 
 	auto img_accessor = img.template mutable_unchecked<4>();
 
@@ -289,7 +295,18 @@ _add_atom_to_image(
 		fill *= atom.occupancy;
 
 		for (auto const channel: atom.channels) {
-			img_accessor(channel, voxel(0), voxel(1), voxel(2)) += fill;
+			switch (agg_algorithm) {
+				case AggAlgorithm::Sum:
+					img_accessor(channel, voxel(0), voxel(1), voxel(2)) += fill;
+					break;
+				case AggAlgorithm::Max:
+					img_accessor(channel, voxel(0), voxel(1), voxel(2)) = std::max(
+							img_accessor(channel, voxel(0), voxel(1), voxel(2)),
+							static_cast<T>(fill));
+					break;
+				default:
+					throw std::runtime_error("unknown aggregation algorithm");
+			}	
 		}
 	}
 
@@ -331,7 +348,8 @@ _add_atoms_to_image(
 		py::array_t<int64_t, py::array::f_style | py::array::forcecast> channels_flat,
 		py::array_t<uint32_t> channel_lengths,
 		py::array_t<scalar_t> occupancy,
-		FillAlgorithm const fill_algorithm) {
+		FillAlgorithm const fill_algorithm,
+		AggAlgorithm const agg_algorithm) {
 
 	auto x_getter = x.template unchecked<1>();
 	auto y_getter = y.template unchecked<1>();
@@ -367,7 +385,7 @@ _add_atoms_to_image(
 				channels_i,
 				occupancy_getter(i)
 		);
-		_add_atom_to_image(img, grid, atom, fill_algorithm);
+		_add_atom_to_image(img, grid, atom, fill_algorithm, agg_algorithm);
 	}
 }
 
@@ -521,6 +539,10 @@ That is, all of their sides have the same length.  Grid objects are immutable.
 		.value("FractionAtom", FillAlgorithm::FractionAtom)
 		.value("FractionVoxel", FillAlgorithm::FractionVoxel);
 
+	py::enum_<AggAlgorithm>(m, "AggAlgorithm", "The algorithm used to aggregate multiple fill values for a single voxel.")
+		.value("Sum", AggAlgorithm::Sum)
+		.value("Max", AggAlgorithm::Max);
+
 	m.def(
 			"_add_atoms_to_image",
 			&_add_atoms_to_image<float>,
@@ -533,7 +555,8 @@ That is, all of their sides have the same length.  Grid objects are immutable.
 			py::arg("channels_flat").noconvert(),
 			py::arg("channel_lengths").noconvert(),
 			py::arg("occupancies").noconvert(),
-			py::arg("fill_algorithm"));
+			py::arg("fill_algorithm"),
+			py::arg("agg_algorithm"));
 
 	m.def(
 			"_add_atoms_to_image",
@@ -547,7 +570,8 @@ That is, all of their sides have the same length.  Grid objects are immutable.
 			py::arg("channels_flat").noconvert(),
 			py::arg("channel_lengths").noconvert(),
 			py::arg("occupancies").noconvert(),
-			py::arg("fill_algorithm"));
+			py::arg("fill_algorithm"),
+			py::arg("agg_algorithm"));
 
 	m.def(
 			"_add_atom_to_image",
@@ -555,7 +579,8 @@ That is, all of their sides have the same length.  Grid objects are immutable.
 			py::arg("img").noconvert(),
 			py::arg("grid"),
 			py::arg("atom"),
-			py::arg("fill_algorithm"));
+			py::arg("fill_algorithm"),
+			py::arg("agg_algorithm"));
 
 	m.def(
 			"_add_atom_to_image",
@@ -563,7 +588,8 @@ That is, all of their sides have the same length.  Grid objects are immutable.
 			py::arg("img").noconvert(),
 			py::arg("grid"),
 			py::arg("atom"),
-			py::arg("fill_algorithm")); 
+			py::arg("fill_algorithm"),
+			py::arg("agg_algorithm"));
 
 	m.def(
 			"_find_voxels_possibly_contacting_sphere",

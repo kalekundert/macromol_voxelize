@@ -891,6 +891,32 @@ test_image_from_atoms:
       0 1 0 0: 1/2
       1 0 1 1: 1/2
       1 1 1 1: 1/2
+  -
+    id: agg-sum
+    atoms:
+      > c r    x    y    z
+      > 0 0.5 -0.5 -0.5 -0.5
+      > 0 0.5  0.0 -0.5 -0.5
+    img_params:
+      grid: 2
+      channels: 1
+      agg_algorithm: Sum
+    expected:
+      0 0 0 0: 3/2
+      0 1 0 0: 1/2
+  -
+    id: agg-max
+    atoms:
+      > c r    x    y    z
+      > 0 0.5 -0.5 -0.5 -0.5
+      > 0 0.5  0.0 -0.5 -0.5
+    img_params:
+      grid: 2
+      channels: 1
+      agg_algorithm: Max
+    expected:
+      0 0 0 0: 1
+      0 1 0 0: 1/2
 
 test_check_channels:
   -

@@ -4,8 +4,8 @@ import polars as pl
 import numpy as np
 
 from ._voxelize import (
-        Grid, FillAlgorithm, _add_atoms_to_image, _get_voxel_center_coords,
-        _find_voxels_containing_coords,
+        Grid, FillAlgorithm, AggAlgorithm, _add_atoms_to_image,
+        _get_voxel_center_coords, _find_voxels_containing_coords,
 )
 from dataclasses import dataclass
 
@@ -96,6 +96,21 @@ class ImageParams:
           occupied by atoms.  This is calculated separately for each atom, 
           then summed, so the result can be greater than 1.
 
+    .. attribute:: agg_algorithm
+        :type: AggAlgorithm
+        :value: AggAlgorithm.Sum
+
+        The algorithm used to aggregate a new fill value for a voxel with the 
+        existing value of that voxel.
+
+        - ``AggAlgorithm.Sum``: Sum the two values.  This results in 
+          meaningful volumes/fractions when a voxel is partially occupied by 
+          two different atoms.
+
+        - ``AggAlgorithm.Max``: Keep the higher of the two values.  This may 
+          give more reasonable results than summing when there are lots of 
+          overlapping atoms.
+
     .. _overlap: https://github.com/severinstrobl/overlap
     """
 
@@ -104,6 +119,7 @@ class ImageParams:
     dtype: Type[np.floating] = np.float32
     max_radius_A: Optional[float] = None
     fill_algorithm: FillAlgorithm = FillAlgorithm.FractionAtom
+    agg_algorithm: AggAlgorithm = AggAlgorithm.Sum
 
 Image: TypeAlias = NDArray
 
@@ -202,6 +218,7 @@ def image_from_all_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> Image:
             atoms['channels'].list.len().to_numpy(),  # no need for cast; len() always returns pl.Int32
             atoms['occupancy'].cast(pl.Float64).to_numpy(),
             img_params.fill_algorithm,
+            img_params.agg_algorithm,
     )
 
     return img

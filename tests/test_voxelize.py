@@ -99,6 +99,7 @@ def image_params(params):
             dtype=with_np.eval(params.get('dtype', 'np.float32')),
             max_radius_A=eval(params.get('max_radius_A', 'None')),
             fill_algorithm=fill_algorithm(params.get('fill_algorithm', 'FractionAtom')),
+            agg_algorithm=agg_algorithm(params.get('agg_algorithm', 'Sum')),
     )
 
 def fill_algorithm(params):
@@ -108,6 +109,13 @@ def fill_algorithm(params):
             'FractionVoxel': mmvox.FillAlgorithm.FractionVoxel,
     }
     return fill_algorithms[params]
+
+def agg_algorithm(params):
+    agg_algorithms = {
+            'Sum': mmvox.AggAlgorithm.Sum,
+            'Max': mmvox.AggAlgorithm.Max,
+    }
+    return agg_algorithms[params]
 
 def image(params):
     return {
@@ -335,6 +343,7 @@ def test_add_atoms_to_image_err_no_copy():
                 atoms['channels'].list.len().to_numpy(),
                 atoms['occupancy'].to_numpy(),
                 _mmvox_cpp.FillAlgorithm.FractionAtom,
+                _mmvox_cpp.AggAlgorithm.Sum,
         )
 
 @pff.parametrize(
@@ -347,6 +356,7 @@ def test_add_atom_to_image(img_params, atom, expected):
             img_params.grid,
             atom,
             img_params.fill_algorithm,
+            img_params.agg_algorithm,
     )
     assert_images_match(img, expected)
 

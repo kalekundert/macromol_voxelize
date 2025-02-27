@@ -25,6 +25,7 @@ API Reference
    macromol_voxelize.ImageParams
    macromol_voxelize.Grid
    macromol_voxelize.FillAlgorithm
+   macromol_voxelize.AggAlgorithm
 
 .. rubric:: Exceptions
 
