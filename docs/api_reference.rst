@@ -14,6 +14,7 @@ API Reference
    macromol_voxelize.set_atom_channels_by_element
    macromol_voxelize.add_atom_channel_by_expr
    macromol_voxelize.get_voxel_center_coords
+   macromol_voxelize.find_voxels_containing_coords
    macromol_voxelize.find_occupied_voxels
 
 .. rubric:: Data structures

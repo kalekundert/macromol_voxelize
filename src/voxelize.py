@@ -406,7 +406,7 @@ def add_atom_channel_by_expr(
     )
 
 def get_voxel_center_coords(grid, voxels):
-    """\
+    """
     Calculate the center coordinates of the given voxels.
 
     Arguments:
@@ -414,7 +414,7 @@ def get_voxel_center_coords(grid, voxels):
             An object specifying the size and location of each voxel.
             
         voxels:
-            An integer array of dimension (N, 3) specifying the indices of 
+            An integer array of dimension $(N, 3)$ specifying the indices of 
             the voxels to calculate coordinates for.
     """
     # There are two things to keep in mind when passing arrays between 
@@ -442,6 +442,26 @@ def get_voxel_center_coords(grid, voxels):
 
     coords_A = _get_voxel_center_coords(grid, voxels.T).T
     return coords_A.reshape(voxels.shape)
+
+def find_voxels_containing_coords(grid, coords_A):
+    """
+    Calculate the voxel indices that contain the given coordinates.
+
+    Arguments:
+        grid:
+            An object specifying the size and location of each voxel.
+
+        coords_A:
+            The coordinates of interest, in units of angstroms.  The dimensions 
+            of this array should either be $(3)$, for one coordinate, or $(N, 
+            3)$, for $N$ coordinates.
+
+    Returns:
+        An integer array of voxel indices, with the same dimensions as the 
+        input coordinates.
+    """
+    voxels = _find_voxels_containing_coords(grid, coords_A.T).T
+    return voxels.reshape(coords_A.shape)
 
 def find_occupied_voxels(atoms: pl.DataFrame, grid: Grid):
     """

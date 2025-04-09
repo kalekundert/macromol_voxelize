@@ -418,8 +418,15 @@ def test_find_voxels_possibly_contacting_sphere(grid, sphere, expected):
 )
 def test_find_voxels_containing_coords(grid, coords, voxels):
     np.testing.assert_array_equal(
-            _mmvox_cpp._find_voxels_containing_coords(grid, coords.T),
-            voxels.T,
+            mmvox.find_voxels_containing_coords(grid, coords),
+            voxels,
+            verbose=True,
+    )
+
+    # Also make sure that 1D inputs are handled correctly:
+    np.testing.assert_array_equal(
+            mmvox.find_voxels_containing_coords(grid, coords[0]),
+            voxels[0],
             verbose=True,
     )
 
