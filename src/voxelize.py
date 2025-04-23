@@ -8,8 +8,9 @@ from ._voxelize import (
         _get_voxel_center_coords, _find_voxels_containing_coords,
 )
 from dataclasses import dataclass
+from pathlib import Path
 
-from typing import Optional, Type, Tuple, List
+from typing import Optional, Type, Union, Tuple, List
 from typing_extensions import TypeAlias
 
 try:
@@ -532,6 +533,21 @@ def find_occupied_voxels(atoms: pl.DataFrame, grid: Grid):
         return slice(start, end)
 
     return ..., get_slice(0), get_slice(1), get_slice(2)
+
+def write_npz(path: Union[str, Path], img: Image, grid: Grid):
+    """
+    Write the given image to an ``*.npz`` file.
+
+    The resulting file can be visualized using PyMOL.  The physical dimensions 
+    of the image are included in the file, so the image can be properly 
+    superimposed on a molecular structure.
+    """
+    np.savez(
+            path,
+            image=img,
+            resolution_A=grid.resolution_A,
+            center_A=grid.center_A,
+    )
 
 
 def _check_channels(atoms, num_channels):

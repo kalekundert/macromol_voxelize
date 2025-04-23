@@ -16,6 +16,7 @@ API Reference
    macromol_voxelize.get_voxel_center_coords
    macromol_voxelize.find_voxels_containing_coords
    macromol_voxelize.find_occupied_voxels
+   macromol_voxelize.write_npz
 
 .. rubric:: Data structures
 

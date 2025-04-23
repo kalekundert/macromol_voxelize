@@ -13,6 +13,7 @@ from pathlib import Path
 from itertools import product, chain, repeat
 from more_itertools import take
 from pipeline_func import f
+from collections.abc import Mapping
 
 from macromol_voxelize import (
         ImageParams, Grid, image_from_atoms, set_atom_radius_A,
@@ -191,7 +192,16 @@ EXAMPLES
 
 """
     img_path = Path(img_path)
-    img = np.load(img_path)
+    img_archive = np.load(img_path)
+
+    if isinstance(img_archive, Mapping):
+        img = img_archive['image']
+        resolution_A = float(img_archive['resolution_A'])
+        center_A = img_archive['center_A']
+    else:
+        img = img_archive
+        resolution_A = float(resolution_A) or 1.0
+        center_A = np.zeros(3)
 
     if len(img.shape) not in [4, 5]:
         raise ValueError(f"expected an image of dimension [B,] C, W, H, D; got {len(img.shape)} dimensions")
@@ -234,6 +244,7 @@ EXAMPLES
             grid=Grid(
                 length_voxels=d,
                 resolution_A=float(resolution_A),
+                center_A=center_A,
             ),
             channel_colors=colors,
             outline=outline,
@@ -243,8 +254,13 @@ EXAMPLES
 
 pymol.cmd.extend('load_voxels', load_voxels)
 cmd.auto_arg[0]['load_voxels'] = [
-        lambda: cmd.Shortcut([p.name for p in Path.cwd().glob('*.npy')]),
-        'image path (*.npy)',
+        lambda: cmd.Shortcut([
+            p.name for p in chain(
+                Path.cwd().glob('*.npy'),
+                Path.cwd().glob('*.npz'),
+            )
+        ]),
+        'image path (*.npy, *.npz)',
         '',
 ]
 
