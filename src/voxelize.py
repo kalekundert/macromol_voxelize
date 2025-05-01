@@ -347,16 +347,25 @@ def set_atom_channels_by_element(
         for elem in elems:
             channel_map.setdefault(elem, []).append(i)
 
-    atoms = atoms.with_columns(
-            channels=(
-                pl.col('element')
-                .replace_strict(
-                    channel_map,
-                    default=channel_map.pop('*', None),
-                    return_dtype=pl.List(pl.Int64),
-                )
-            ),
+    star_channel = channel_map.pop('*', None)
+    channel_df = pl.DataFrame({
+        'element': channel_map.keys(),
+        'channels': channel_map.values(),
+    })
+
+    atoms = (
+            atoms
+            .join(
+                channel_df,
+                on='element',
+                how='left',
+            )
     )
+
+    if star_channel is not None:
+        atoms = atoms.with_columns(
+                pl.col('channels').fill_null(star_channel)
+        )
 
     if drop_missing_atoms:
         return atoms.drop_nulls('channels')
