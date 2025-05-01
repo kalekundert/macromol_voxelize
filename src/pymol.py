@@ -65,7 +65,8 @@ ARGUMENTS
     entry in this list will correspond to a channel in the image. {default: 
     'C,N,O'}
 
-    element_radius_A = float: The radius of each atom, in Angstroms.
+    element_radius_A = float: The radius of each atom, in Angstroms.  By 
+    default, this is half of the `resolution_A` value.
 
     outline = bool: Whether to render an outline of the image, "yes" or "no". 
     {default: no}
