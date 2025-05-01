@@ -141,10 +141,12 @@ def image_from_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> Tuple[Imag
               angstroms.  The `set_atom_radius_A()` function can be used to 
               create this column, if necessary.
 
-            - *channels* (required): The channels that each atoms belongs to, 
-              expressed as a list of integers.  Each atom can belong to any 
-              number of channels.  Each channel index must be between 0 and 
-              ``img_params.channels - 1``, inclusive.
+            - *channels* (required/optional): The channels that each atoms 
+              belongs to, expressed as a list of integers.  Each atom can 
+              belong to any number of channels.  Each channel index must be 
+              between 0 and ``img_params.channels - 1``, inclusive.  If the 
+              image only has one channel (i.e. ``img_params.channels == 1``), 
+              this column is optional.
 
             - *occupancy* (optional): How "present" each atom is.  More 
               specifically, this is a factor that will be used to scale the 
@@ -198,6 +200,8 @@ def image_from_all_atoms(atoms: pl.DataFrame, img_params: ImageParams) -> Image:
         _check_channels(atoms, img_params.channels)
         _check_max_radius_A(atoms, img_params.max_radius_A)
 
+    if 'channels' not in atoms and img_params.channels == 1:
+        atoms = atoms.with_columns(channels=[0])
     if 'occupancy' not in atoms:
         atoms = atoms.with_columns(occupancy=1.0)
 
@@ -551,6 +555,9 @@ def write_npz(path: Union[str, Path], img: Image, grid: Grid):
 
 
 def _check_channels(atoms, num_channels):
+    if 'channels' not in atoms.columns:
+        return
+
     channels = atoms['channels'].explode()
     if not channels.is_empty():
         if (n := channels.min()) < 0 or (n := channels.max()) >= num_channels:
