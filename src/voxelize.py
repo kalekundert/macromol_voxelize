@@ -547,19 +547,51 @@ def find_occupied_voxels(atoms: pl.DataFrame, grid: Grid):
 
     return ..., get_slice(0), get_slice(1), get_slice(2)
 
-def write_npz(path: Union[str, Path], img: Image, grid: Grid):
+def write_npz(
+        path: Union[str, Path],
+        img: Image,
+        grid: Grid,
+        frame_xi: Optional[NDArray] = None,
+):
     """
     Write the given image to an ``*.npz`` file.
 
+    Arguments:
+        path:
+            The path to write the image to.  By convention, this path should 
+            have the ``.npz`` suffix.
+
+        img: The image to write.  See `image_from_atoms()`.
+
+        grid: The dimensions of the image.  See `ImageParams`.
+
+        frame_xi:
+            A coordinate frame transformation that should be applied to the 
+            image when it's being rendered in PyMOL.  If no transformation is 
+            specified, the image will be centered at (0, 0, 0) and aligned with 
+            the x-, y-, and z-axes.  The purpose of specifying a transformation 
+            is usually to align the image to the structure that it's based on.
+
+            The frame should be given as a 4x4 matrix (i.e. a homogeneous 
+            transformation matrix).  The matrix should transform from a 
+            coordinate frame "x" where the image is centered at the origin and 
+            aligned with all three axes, to the desired coordinate frame "i", 
+            which is typically that of the input structure.  The suffix "_xi" 
+            is meant to be a reminder of this.
+
     The resulting file can be visualized using PyMOL.  The physical dimensions 
-    of the image are included in the file, so the image can be properly 
-    superimposed on a molecular structure.
+    of the image and its alignment are included in the file, so the image can 
+    be properly superimposed on a molecular structure.
     """
+    if frame_xi is None:
+        frame_xi = np.eye(4)
+
     np.savez(
             path,
             image=img,
             resolution_A=grid.resolution_A,
             center_A=grid.center_A,
+            frame_xi=frame_xi,
     )
 
 

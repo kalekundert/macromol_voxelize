@@ -199,10 +199,12 @@ EXAMPLES
         img = img_archive['image']
         resolution_A = float(img_archive['resolution_A'])
         center_A = img_archive['center_A']
+        frame_xi = img_archive['frame_xi']
     else:
         img = img_archive
         resolution_A = float(resolution_A) or 1.0
         center_A = np.zeros(3)
+        frame_xi = None
 
     if len(img.shape) not in [4, 5]:
         raise ValueError(f"expected an image of dimension [B,] C, W, H, D; got {len(img.shape)} dimensions")
@@ -249,6 +251,7 @@ EXAMPLES
             ),
             channel_colors=colors,
             outline=outline,
+            frame_xi=frame_xi,
             scale_alpha=parse_bool(scale_alpha),
             batch_index=int(batch_index),
     )
