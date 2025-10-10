@@ -1028,6 +1028,22 @@ test_set_atom_channels_by_element:
       > C       3 4 5 0
       > O       4 5 6 1
   -
+    id: channels-star-only
+    atoms:
+      > element x y z
+      > N       1 2 3
+      > C       2 3 4
+      > C       3 4 5
+      > O       4 5 6
+    channels:
+      [[*]]
+    expected:
+      > element x y z c
+      > N       1 2 3 0
+      > C       2 3 4 0
+      > C       3 4 5 0
+      > O       4 5 6 0
+  -
     id: channels-substr-match
     # This test case was more relevant when I was using regular expressions to 
     # match element names, but there's no reason to get rid of it.

@@ -348,10 +348,16 @@ def set_atom_channels_by_element(
             channel_map.setdefault(elem, []).append(i)
 
     star_channel = channel_map.pop('*', None)
-    channel_df = pl.DataFrame({
-        'element': channel_map.keys(),
-        'channels': channel_map.values(),
-    })
+    channel_df = pl.DataFrame(
+            data={
+                'element': channel_map.keys(),
+                'channels': channel_map.values(),
+            },
+            schema={
+                'element': str,
+                'channels': pl.List(pl.Int64),
+            },
+    )
 
     atoms = (
             atoms
